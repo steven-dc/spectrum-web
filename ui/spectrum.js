@@ -68,10 +68,8 @@ const builtInPresets = {
             "gravity": 3.8,
             "peakFade": 750,
             "peakHold": 500,
-            "maxFPS": 60,
             "linkGrads": false,
             "splitGrad": false,
-            "showFPS": false,
             "loRes": false
         }
     },
@@ -118,7 +116,7 @@ const builtInPresets = {
             gradient: "rainbow",
             ledBars: false,
             lumiBars: false,
-            mode: 10,
+            mode: 6,
             outlineBars: false,
             radial: false,
             reflexRatio: 0.25,
@@ -139,7 +137,7 @@ const builtInPresets = {
             ledBars: false,
             lumiBars: false,
             mirror: 0,
-            mode: 10,
+            mode: 8,
             outlineBars: false,
             radial: true,
             showPeaks: true,
@@ -233,32 +231,32 @@ class PCMPlayer {
 }
 
 // Initialize when ready
-if (window.pcmPlayer) {
-    const volumeContainer = document.getElementById('volumeControlContainer');
-    if (volumeContainer) {
-        const volumeControl = createVolumeControl(window.pcmPlayer);
-        volumeContainer.appendChild(volumeControl);
-        console.log('[Volume Control] Initialized immediately');
-    }
-} else {
-    let attempts = 0;
-    const checkPCM = setInterval(() => {
-        attempts++;
-        if (window.pcmPlayer) {
-            clearInterval(checkPCM);
-            const volumeContainer = document.getElementById('volumeControlContainer');
-            if (volumeContainer) {
-                const volumeControl = createVolumeControl(window.pcmPlayer);
-                volumeContainer.appendChild(volumeControl);
-                console.log('[Volume Control] Initialized after waiting');
-            }
-        }
-        if (attempts > 50) {
-            clearInterval(checkPCM);
-            console.error('[Volume Control] PCM Player not found');
-        }
-    }, 100);
-}
+// if (window.pcmPlayer) {
+//     const volumeContainer = document.getElementById('volumeControlContainer');
+//     if (volumeContainer) {
+//         const volumeControl = createVolumeControl(window.pcmPlayer);
+//         volumeContainer.appendChild(volumeControl);
+//         console.log('[Volume Control] Initialized immediately');
+//     }
+// } else {
+//     let attempts = 0;
+//     const checkPCM = setInterval(() => {
+//         attempts++;
+//         if (window.pcmPlayer) {
+//             clearInterval(checkPCM);
+//             const volumeContainer = document.getElementById('volumeControlContainer');
+//             if (volumeContainer) {
+//                 const volumeControl = createVolumeControl(window.pcmPlayer);
+//                 volumeContainer.appendChild(volumeControl);
+//                 console.log('[Volume Control] Initialized after waiting');
+//             }
+//         }
+//         if (attempts > 50) {
+//             clearInterval(checkPCM);
+//             console.error('[Volume Control] PCM Player not found');
+//         }
+//     }, 100);
+// }
 
 // ===========================
 // UI FUNCTIONS
@@ -365,9 +363,6 @@ function setupEventListeners() {
         const el = document.getElementById(id);
         if (el) el.addEventListener(event, handler);
     };
-
-
-
 
     // Mode Select
     const modeSelect = document.getElementById('modeSelect');
@@ -504,11 +499,11 @@ function setupEventListeners() {
         });
     }
 
-    const scaleYSelect = document.getElementById('scaleYSelect');
+    const scaleYSelect = document.getElementById('showScaleY');
     if (scaleYSelect) {
         scaleYSelect.addEventListener('change', function (e) {
             if (audioMotion) {
-                audioMotion.showScaleY = parseInt(e.target.value);
+                audioMotion.showScaleY = e.target.value === 'true';
             }
         });
     }
@@ -614,29 +609,29 @@ function setupEventListeners() {
         if (audioMotion) audioMotion.peakHoldTime = parseInt(this.value);
     });
 
-    // Display
-    addListener("showFPS", "click", function () {
-        const active = this.dataset.active === '1';
-        this.dataset.active = active ? '0' : '1';
-        if (audioMotion) audioMotion.showFPS = !active;
-    });
+    // // Display
+    // addListener("showFPS", "click", function () {
+    //     const active = this.dataset.active === '1';
+    //     this.dataset.active = active ? '0' : '1';
+    //     if (audioMotion) audioMotion.showFPS = !active;
+    // });
 
-    addListener("loRes", "click", function () {
-        const active = this.dataset.active === '1';
-        this.dataset.active = active ? '0' : '1';
-        if (audioMotion) audioMotion.loRes = !active;
-    });
+    // addListener("loRes", "click", function () {
+    //     const active = this.dataset.active === '1';
+    //     this.dataset.active = active ? '0' : '1';
+    //     if (audioMotion) audioMotion.loRes = !active;
+    // });
 
     // General
-    addListener("maxFPS", "change", function () {
-        if (audioMotion) audioMotion.maxFPS = parseInt(this.value);
-    });
+    // addListener("maxFPS", "change", function () {
+    //     if (audioMotion) audioMotion.maxFPS = parseInt(this.value);
+    // });
 
-    addListener("fsHeight", "input", function () {
-        const val = parseInt(this.value);
-        const display = document.getElementById('fsHeightValue');
-        if (display) display.textContent = val + '%';
-    });
+    // addListener("fsHeight", "input", function () {
+    //     const val = parseInt(this.value);
+    //     const display = document.getElementById('fsHeightValue');
+    //     if (display) display.textContent = val + '%';
+    // });
 
     addListener("showControlBar", "change", function () {
         const fpsCounter = document.getElementById("fpsCounter");
@@ -762,7 +757,7 @@ function savePreset() {
 
 function getCurrentSettings() {
     return {
-        mode: parseInt(getSelectedRadio('mode') || 10),
+        mode: parseInt(document.getElementById('mode')?.value || 10),
         gradient: document.getElementById('gradient')?.value || 'prism',
         gradientRight: document.getElementById('gradientRight')?.value || 'prism',
         colorMode: getSelectedRadio('colorModeSelect') || 'gradient',
@@ -775,7 +770,7 @@ function getCurrentSettings() {
         roundBars: document.getElementById('roundBars')?.dataset.active === '1',
         reflexRatio: getSelectedRadio('reflexSelect') || '0',
         showScaleX: getSelectedRadio('scaleXSelect') || '1',
-        showScaleY: getSelectedRadio('scaleYSelect') || '0',
+        showScaleY: getSelectedRadio('showScaleY') === 'true',
         channelLayout: document.getElementById('channelLayout')?.value || 'single',
         mirror: getSelectedRadio('mirrorSelect') || '0',
         freqScale: getSelectedRadio('freqScaleSelect') || 'log',
@@ -795,11 +790,11 @@ function getCurrentSettings() {
         gravity: parseFloat(document.getElementById('gravity')?.value || 3.8),
         peakFade: parseInt(document.getElementById('peakFade')?.value || 750),
         peakHold: parseInt(document.getElementById('peakHold')?.value || 500),
-        maxFPS: parseInt(document.getElementById('maxFPS')?.value || 60),
         linkGrads: document.getElementById('linkGrads')?.dataset.active === '1',
         splitGrad: document.getElementById('splitGrad')?.dataset.active === '1',
-        showFPS: document.getElementById('showFPS')?.dataset.active === '1',
-        loRes: document.getElementById('loRes')?.dataset.active === '1'
+        // maxFPS: parseInt(document.getElementById('maxFPS')?.value || 60),
+        // showFPS: document.getElementById('showFPS')?.dataset.active === '1',
+        // loRes: document.getElementById('loRes')?.dataset.active === '1'
     };
 }
 
@@ -810,7 +805,8 @@ function applyPreset(preset) {
 
     if (preset.mode !== undefined) {
         audioMotion.mode = parseInt(preset.mode);
-        setRadioValue('modeSelect', preset.mode.toString());
+        const modeSelect = document.getElementById('mode');
+        if (modeSelect) modeSelect.value = preset.mode.toString();
     }
 
     if (preset.gradient) {
@@ -882,8 +878,8 @@ function applyPreset(preset) {
     }
 
     if (preset.showScaleY !== undefined) {
-        audioMotion.showScaleY = parseInt(preset.showScaleY);
-        setRadioValue('scaleYSelect', preset.showScaleY.toString());
+        audioMotion.showScaleY = preset.showScaleY === true || preset.showScaleY === 'true';
+        setRadioValue('showScaleY', preset.showScaleY ? 'true' : 'false');
     }
 
     if (preset.channelLayout) {
@@ -1019,23 +1015,23 @@ function applyPreset(preset) {
         }
     }
 
-    if (preset.maxFPS !== undefined) {
-        audioMotion.maxFPS = preset.maxFPS;
-        const maxFPSSelect = document.getElementById('maxFPS');
-        if (maxFPSSelect) maxFPSSelect.value = preset.maxFPS;
-    }
+    // if (preset.maxFPS !== undefined) {
+    //     audioMotion.maxFPS = preset.maxFPS;
+    //     const maxFPSSelect = document.getElementById('maxFPS');
+    //     if (maxFPSSelect) maxFPSSelect.value = preset.maxFPS;
+    // }
 
-    if (preset.showFPS !== undefined) {
-        audioMotion.showFPS = preset.showFPS;
-        const showFPSEl = document.getElementById('showFPS');
-        if (showFPSEl) showFPSEl.dataset.active = preset.showFPS ? '1' : '0';
-    }
+    // if (preset.showFPS !== undefined) {
+    //     audioMotion.showFPS = preset.showFPS;
+    //     const showFPSEl = document.getElementById('showFPS');
+    //     if (showFPSEl) showFPSEl.dataset.active = preset.showFPS ? '1' : '0';
+    // }
 
-    if (preset.loRes !== undefined) {
-        audioMotion.loRes = preset.loRes;
-        const loResEl = document.getElementById('loRes');
-        if (loResEl) loResEl.dataset.active = preset.loRes ? '1' : '0';
-    }
+    // if (preset.loRes !== undefined) {
+    //     audioMotion.loRes = preset.loRes;
+    //     const loResEl = document.getElementById('loRes');
+    //     if (loResEl) loResEl.dataset.active = preset.loRes ? '1' : '0';
+    // }
 
     if (preset.linkGrads !== undefined) {
         const linkEl = document.getElementById('linkGrads');
@@ -1328,6 +1324,73 @@ function updateBackgroundFit(fit) {
     console.log('[BG] Fit changed to:', fit);
 }
 
+async function uploadBackground(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById('uploadStatus');
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Uploading...';
+        statusEl.style.color = '#8b9dc3';
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/backgrounds', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Upload failed');
+        }
+
+        const result = await response.json();
+        console.log('[BG] Upload successful:', result);
+
+        if (statusEl) {
+            statusEl.textContent = `✓ Uploaded: ${result.filename}`;
+            statusEl.style.color = '#4ade80';
+        }
+
+        // Refresh the background files list
+        await refreshBackgroundFiles();
+
+        // Auto-select the uploaded file
+        setTimeout(() => {
+            const bgFileSelect = document.getElementById('bgFile');
+            if (bgFileSelect) {
+                bgFileSelect.value = result.filename;
+                const bgType = document.getElementById('bgType');
+                if (bgType && bgType.value !== 'file') {
+                    bgType.value = 'file';
+                    updateBackgroundControls();
+                }
+                applyBackground();
+            }
+        }, 100);
+
+        // Clear status after 3 seconds
+        setTimeout(() => {
+            if (statusEl) statusEl.style.display = 'none';
+        }, 3000);
+
+    } catch (error) {
+        console.error('[BG] Upload error:', error);
+        if (statusEl) {
+            statusEl.textContent = `✗ Error: ${error.message}`;
+            statusEl.style.color = '#f87171';
+        }
+    }
+
+    // Clear the input
+    input.value = '';
+}
+
 // ===========================
 // IMPORT/EXPORT
 // ===========================
@@ -1380,7 +1443,23 @@ function updateProgressBar() {
 
     if (!progressFill || !currentTimeEl) return;
 
-    fetchVolumioState(true);
+    // Fetch latest state to check if still playing
+    fetch(`${getVolumioUrl()}/api/v1/getState`)
+        .then(res => res.json())
+        .then(state => {
+            if (state.status === 'play') {
+                updateProgress(state);
+            } else {
+                // Stop interval if not playing anymore
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
+            }
+        })
+        .catch(e => {
+            console.warn('[Progress] Update failed:', e);
+        });
 }
 
 async function fetchVolumioState(progressOnly = false) {
@@ -1428,20 +1507,22 @@ function updateNowPlaying(state) {
 
     if (!nowPlaying) return;
 
-    if (state && (state.status === 'play' || state.status === 'pause')) {
+    if (state) {
         const setTextContent = (id, text) => {
             const el = document.getElementById(id);
             if (el) el.textContent = text;
         };
 
-        setTextContent('trackTitle', state.title || 'Unknown Title');
-        setTextContent('trackArtist', state.artist || 'Unknown Artist');
-        setTextContent('trackAlbum', state.album || 'Unknown Album');
+        setTextContent('trackTitle', state.title || 'No Track');
+        setTextContent('trackArtist', state.artist || 'No Artist');
+        setTextContent('trackAlbum', state.album || 'No Album');
 
         const artImg = document.getElementById('trackArt');
         if (artImg && state.albumart) {
             artImg.src = state.albumart.startsWith('http') ? state.albumart :
                 `${getVolumioUrl()}${state.albumart}`;
+        } else if (artImg) {
+            artImg.src = '/albumart';
         }
 
         setTimeout(() => updateCoverBackground(), 100);
@@ -1471,12 +1552,10 @@ function updateNowPlaying(state) {
         nowPlaying.classList.remove('hidden');
         nowPlaying.classList.add('show');
     } else {
-        // THÊM DÒNG NÀY
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
         }
-        // KẾT THÚC THÊM
         nowPlaying.classList.remove('show');
         setTimeout(() => nowPlaying.classList.add('hidden'), 300);
     }
@@ -1485,6 +1564,284 @@ function updateNowPlaying(state) {
 // ===========================
 // QUEUE MANAGEMENT
 // ===========================
+let browsePanelVisible = false;
+let browseHistory = [];
+let currentBrowsePath = null;
+
+function openVolumioMusic() {
+    toggleBrowse();
+}
+
+function toggleBrowse() {
+    browsePanelVisible = !browsePanelVisible;
+    const panel = document.getElementById('browsePanel');
+    const controlBar = document.getElementById('controlBar');
+
+    if (browsePanelVisible) {
+        panel.classList.add('show');
+        if (controlBar) {
+            controlBar.classList.add('with-queue');
+        }
+        // Start from root if no history
+        if (browseHistory.length === 0) {
+            browseMusicLibrary();
+        }
+    } else {
+        panel.classList.remove('show');
+        if (controlBar) {
+            controlBar.classList.remove('with-queue');
+        }
+    }
+}
+
+async function browseMusicLibrary(uri = null) {
+    try {
+        const volumioUrl = getVolumioUrl();
+        let url = `${volumioUrl}/api/v1/browse`;
+        
+        if (uri) {
+            url += `?uri=${encodeURIComponent(uri)}`;
+        }
+
+        console.log('[Browse] Fetching:', url);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`API returned ${response.status}`);
+
+        const data = await response.json();
+        console.log('[Browse] Response:', data);
+
+        // Update history
+        if (uri) {
+            browseHistory.push(currentBrowsePath);
+        }
+        currentBrowsePath = { uri: uri, title: data.title || 'Music Library' };
+
+        displayBrowseItems(data);
+    } catch (e) {
+        console.error('[Browse] Failed:', e);
+        const browseList = document.getElementById('browseList');
+        if (browseList) {
+            browseList.innerHTML = `<div style="padding: 20px; text-align: center; color: #f87171;">Error: ${e.message}</div>`;
+        }
+    }
+}
+
+function displayBrowseItems(data) {
+    const browseList = document.getElementById('browseList');
+    const browsePath = document.getElementById('browsePath');
+    const browseTitle = document.getElementById('browseTitle');
+    
+    if (!browseList) return;
+
+    // Update title and path
+    if (browseTitle) {
+        browseTitle.textContent = data.title || '🎶 Music Library';
+    }
+    
+    if (browsePath) {
+        let pathText = '';
+        if (browseHistory.length > 0) {
+            pathText = `<span style="cursor: pointer; color: #60a5fa;" onclick="browseGoBack()">← Back</span>`;
+        }
+        browsePath.innerHTML = pathText;
+    }
+
+    // Volumio API returns items in different structures:
+    // 1. Root browse: data.navigation.lists = array of items
+    // 2. Folder browse: data.navigation.lists[0].items = array of items
+    let items = [];
+    
+    if (data.navigation && data.navigation.lists) {
+        if (Array.isArray(data.navigation.lists) && data.navigation.lists.length > 0) {
+            // Check if first element has 'items' property (folder structure)
+            if (data.navigation.lists[0].items) {
+                items = data.navigation.lists[0].items;
+            } else {
+                // Root structure - lists itself is the items array
+                items = data.navigation.lists;
+            }
+        }
+    }
+
+    console.log('[Browse] Displaying', items.length, 'items');
+
+    if (!items || items.length === 0) {
+        browseList.innerHTML = '<div style="padding: 20px; text-align: center; color: #8b9dc3;">No items found</div>';
+        return;
+    }
+
+    browseList.innerHTML = '';
+    console.log('[Browse] Displaying', items.length, 'items');
+
+    items.forEach((item, index) => {
+        const element = document.createElement('div');
+        element.className = 'queue-item'; // Reuse queue-item styling
+        
+        // Determine icon based on type
+        let icon = '📁'; // folder
+        if (item.type === 'song' || item.type === 'webradio') {
+            icon = '🎵';
+        } else if (item.type === 'playlist') {
+            icon = '📋';
+        } else if (item.type === 'album') {
+            icon = '💿';
+        } else if (item.type === 'artist') {
+            icon = '🎤';
+        }
+
+        // Get album art if available
+        let albumart = '';
+        if (item.albumart) {
+            albumart = item.albumart.startsWith('http') ? item.albumart : `${getVolumioUrl()}${item.albumart}`;
+        }
+
+        const title = item.title || item.name || 'Unknown';
+        const service = item.service || '';
+
+        element.innerHTML = `
+            <div class="queue-item-index">${icon}</div>
+            <div class="queue-item-art">
+                ${albumart ? `<img src="${albumart}" alt="" onerror="this.style.display='none'">` : ''}
+            </div>
+            <div class="queue-item-info">
+                <div class="queue-item-title">${title}</div>
+                <div class="queue-item-artist">${service}</div>
+            </div>
+            <div class="browse-item-menu" onclick="event.stopPropagation(); showBrowseMenu(event, ${index});">⋮</div>
+        `;
+
+        element.onclick = () => handleBrowseItemClick(item);
+        element.dataset.itemIndex = index;
+        browseList.appendChild(element);
+    });
+
+    // Store items for menu actions
+    window.currentBrowseItems = items;
+}
+
+function handleBrowseItemClick(item) {
+    console.log('[Browse] Item clicked:', item);
+    
+    // If it's a song/track, play it
+    if (item.type === 'song' || item.type === 'webradio') {
+        playBrowseItem(item);
+    } else {
+        // Otherwise, browse into it
+        browseMusicLibrary(item.uri);
+    }
+}
+
+async function playBrowseItem(item) {
+    try {
+        const volumioUrl = getVolumioUrl();
+        
+        // Use replaceAndPlay endpoint to play the item
+        const response = await fetch(`${volumioUrl}/api/v1/replaceAndPlay`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ item: item })
+        });
+        
+        if (response.ok) {
+            console.log('[Browse] Playing:', item.title || item.name);
+            setTimeout(() => fetchVolumioState(), 500);
+        } else {
+            const error = await response.text();
+            console.error('[Browse] Play failed:', response.status, error);
+        }
+    } catch (e) {
+        console.error('[Browse] Play error:', e);
+    }
+}
+
+function showBrowseMenu(event, itemIndex) {
+    const existingMenu = document.getElementById('browseContextMenu');
+    if (existingMenu) existingMenu.remove();
+
+    const item = window.currentBrowseItems[itemIndex];
+    if (!item) return;
+
+    const menu = document.createElement('div');
+    menu.id = 'browseContextMenu';
+    menu.className = 'context-menu';
+
+    const actions = [
+        { label: '▶ Play Now', action: () => playBrowseItem(item) },
+        { label: '⏭ Play Next', action: () => addBrowseItemToQueue(item, 'next') },
+        { label: '➕ Add to Queue', action: () => addBrowseItemToQueue(item, 'end') },
+        { label: '📋 Add to Playlist', action: () => addBrowseItemToPlaylist(item) }
+    ];
+
+    actions.forEach(action => {
+        const option = document.createElement('div');
+        option.className = 'context-menu-item';
+        option.textContent = action.label;
+        option.onclick = () => {
+            action.action();
+            menu.remove();
+        };
+        menu.appendChild(option);
+    });
+
+    document.body.appendChild(menu);
+
+    const rect = event.target.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + 5}px`;
+    menu.style.left = `${rect.left - menu.offsetWidth + 30}px`;
+
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        });
+    }, 0);
+}
+
+async function addBrowseItemToQueue(item, position = 'end') {
+    try {
+        const volumioUrl = getVolumioUrl();
+        const response = await fetch(`${volumioUrl}/api/v1/addToQueue`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(item)
+        });
+        
+        if (response.ok) {
+            console.log('[Browse] Added to queue:', item.title || item.name);
+            setTimeout(() => fetchQueue(), 300);
+        } else {
+            const error = await response.text();
+            console.error('[Browse] Add to queue failed:', response.status, error);
+        }
+    } catch (e) {
+        console.error('[Browse] Add to queue error:', e);
+    }
+}
+
+async function addBrowseItemToPlaylist(item) {
+    const playlistName = prompt('Enter playlist name:');
+    if (!playlistName) return;
+
+    try {
+        console.log('[Browse] Add to playlist:', playlistName, item);
+        alert('Playlist functionality requires additional API implementation');
+    } catch (e) {
+        console.error('[Browse] Add to playlist error:', e);
+    }
+}
+
+function browseGoBack() {
+    if (browseHistory.length > 0) {
+        const previousPath = browseHistory.pop();
+        currentBrowsePath = previousPath;
+        browseMusicLibrary(previousPath?.uri);
+    }
+}
+
 function toggleQueue() {
     queuePanelVisible = !queuePanelVisible;
     const panel = document.getElementById('queuePanel');
@@ -1849,22 +2206,22 @@ async function startAudio() {
 
 
 // Setup global click handler to enable audio on user interaction
-function setupUserInteractionHandler() {
-    const handleUserInteraction = async () => {
-        try {
-            await startAudio();
-        } catch (e) {
-            console.error('[Audio] Failed to start after user interaction:', e);
-        }
-    };
+// function setupUserInteractionHandler() {
+//     const handleUserInteraction = async () => {
+//         try {
+//             await startAudio();
+//         } catch (e) {
+//             console.error('[Audio] Failed to start after user interaction:', e);
+//         }
+//     };
 
-    // Listen for click on the prompt button
-    const promptButton = document.getElementById('startAudioBtn');
-    if (promptButton) {
-        promptButton.addEventListener('click', handleUserInteraction);
-        console.log('[Audio] User interaction handler ready');
-    }
-}
+//     // Listen for click on the prompt button
+//     const promptButton = document.getElementById('startAudioBtn');
+//     if (promptButton) {
+//         promptButton.addEventListener('click', handleUserInteraction);
+//         console.log('[Audio] User interaction handler ready');
+//     }
+// }
 
 
 // ===========================
@@ -2099,7 +2456,15 @@ async function uploadSettings() {
         // Collect inputs
         document.querySelectorAll('#settingsPanel input').forEach(i => {
             if (i.type === 'radio') {
-                if (i.checked) settings[i.name] = i.value;
+                if (i.checked) {
+                    // For showScaleY, use the form's ID and convert to boolean
+                    const formId = i.closest('form')?.id;
+                    if (formId === 'showScaleY') {
+                        settings[formId] = i.value === 'true';
+                    } else if (i.name) {
+                        settings[i.name] = i.value;
+                    }
+                }
             } else if (i.type === 'checkbox') {
                 if (i.id) settings[i.id] = i.checked;
             } else {
@@ -2283,7 +2648,8 @@ function syncUIWithSettings(settings) {
 
         // Scale Y
         if (settings.showScaleY !== undefined) {
-            setRadioValue('scaleYSelect', settings.showScaleY.toString());
+            const scaleYValue = (settings.showScaleY === true || settings.showScaleY === 'true') ? 'true' : 'false';
+            setRadioValue('showScaleY', scaleYValue);
         }
 
         // Mirror
@@ -2402,23 +2768,23 @@ function syncUIWithSettings(settings) {
             }
         }
 
-        // Max FPS
-        if (settings.maxFPS !== undefined) {
-            const select = document.getElementById('maxFPS');
-            if (select) select.value = settings.maxFPS;
-        }
+        // // Max FPS
+        // if (settings.maxFPS !== undefined) {
+        //     const select = document.getElementById('maxFPS');
+        //     if (select) select.value = settings.maxFPS;
+        // }
 
-        // Show FPS
-        if (settings.showFPS !== undefined) {
-            const el = document.getElementById('showFPS');
-            if (el) el.dataset.active = settings.showFPS ? '1' : '0';
-        }
+        // // Show FPS
+        // if (settings.showFPS !== undefined) {
+        //     const el = document.getElementById('showFPS');
+        //     if (el) el.dataset.active = settings.showFPS ? '1' : '0';
+        // }
 
-        // Lo Res
-        if (settings.loRes !== undefined) {
-            const el = document.getElementById('loRes');
-            if (el) el.dataset.active = settings.loRes ? '1' : '0';
-        }
+        // // Lo Res
+        // if (settings.loRes !== undefined) {
+        //     const el = document.getElementById('loRes');
+        //     if (el) el.dataset.active = settings.loRes ? '1' : '0';
+        // }
 
         console.log('[AM] ✓ UI elements synced with server settings');
     } catch (error) {
@@ -2461,7 +2827,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     // Setup user interaction handler for audio
-    setupUserInteractionHandler();
+    // setupUserInteractionHandler();
 
     // Initialize AudioMotion (without audio playback)
     setTimeout(() => {
@@ -2469,6 +2835,13 @@ window.addEventListener("DOMContentLoaded", () => {
             console.error('initAudioMotion error:', e);
         });
     }, 100);
+
+    // Auto-start audio after a short delay
+    setTimeout(() => {
+        startAudio().catch(e => {
+            console.warn('[Audio] Auto-start failed:', e);
+        });
+    }, 500);
 
     setTimeout(() => { forceConnected = false; }, 5000);
 });
