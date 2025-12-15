@@ -7,6 +7,7 @@ var express = require('express');
 var http = require('http');
 var WebSocket = require('ws');
 var { execSync } = require('child_process');
+var multer = require('multer');
 
 module.exports = SpectrumWeb;
 
@@ -676,27 +677,24 @@ SpectrumWeb.prototype.enableKioskMode = function(url) {
     // Stop any existing kiosk instance
     self.disableKioskMode();
     
-    // Create systemd service file for kiosk mode
-    var serviceContent = '[Unit]\n' +
-      'Description=Spectrum Web Kiosk Mode\n' +
-      'After=volumio.service\n' +
-      'Wants=volumio.service\n\n' +
-      '[Service]\n' +
-      'Type=simple\n' +
-      'User=root\n' +
-      'Group=root\n' +
-      'ExecStart=/usr/bin/startx /etc/X11/Xsession /data/plugins/user_interface/spectrum-web/kios.sh\n' +
-      'Restart=always\n' +
-      'RestartSec=10\n\n' +
-      '[Install]\n' +
-      'WantedBy=multi-user.target\n';
+    // Update kiosk.sh with the correct URL
+    var kioskShPath = path.join(__dirname, 'kiosk.sh');
+    if (fs.existsSync(kioskShPath)) {
+      try {
+        var kioskContent = fs.readFileSync(kioskShPath, 'utf8');
+        // Replace the URL in the last line (http://localhost:XXXX)
+        var updatedContent = kioskContent.replace(
+          /http:\/\/localhost:\d+\s*$/m,
+          url + '\n'
+        );
+        fs.writeFileSync(kioskShPath, updatedContent);
+        self.logger.info('[SpectrumWeb] Updated kiosk.sh with URL: ' + url);
+      } catch (err) {
+        self.logger.error('[SpectrumWeb] Failed to update kiosk.sh:', err.message);
+      }
+    }
     
-    var servicePath = '/tmp/spectrum-kiosk.service';
-    fs.writeFileSync(servicePath, serviceContent);
-    
-    // Install and start the service
-    execSync('sudo cp ' + servicePath + ' /etc/systemd/system/');
-    execSync('sudo systemctl daemon-reload');
+    // Enable and start the service (should already exist from install.sh)
     execSync('sudo systemctl enable spectrum-kiosk.service');
     execSync('sudo systemctl start spectrum-kiosk.service');
     
@@ -735,13 +733,6 @@ SpectrumWeb.prototype.disableKioskMode = function() {
       execSync('sudo systemctl disable spectrum-kiosk.service');
     } catch (e) {
       // Service might not be enabled
-    }
-    
-    try {
-      execSync('sudo rm -f /etc/systemd/system/spectrum-kiosk.service');
-      execSync('sudo systemctl daemon-reload');
-    } catch (e) {
-      // Service file might not exist
     }
     
     self.logger.info('[SpectrumWeb] Kiosk mode disabled');
@@ -894,6 +885,68 @@ SpectrumWeb.prototype.initExpress = function(port) {
         res.json(result);
       } catch (e) {
         self.logger.error('[SpectrumWeb] Error listing backgrounds:', e.message);
+        res.status(500).json({ error: e.message });
+      }
+    });
+
+    // API endpoint to upload background files
+    fs.ensureDirSync(backgroundsDir);
+    
+    const storage = multer.diskStorage({
+      destination: function (req, file, cb) {
+        cb(null, backgroundsDir);
+      },
+      filename: function (req, file, cb) {
+        // Keep original filename
+        cb(null, file.originalname);
+      }
+    });
+
+    const fileFilter = function (req, file, cb) {
+      const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp4', 'webm', 'mkv', 'avi', 'mov'];
+      const ext = path.extname(file.originalname).toLowerCase().slice(1);
+      
+      if (allowedExts.includes(ext)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only images and videos allowed.'));
+      }
+    };
+
+    const upload = multer({ 
+      storage: storage,
+      fileFilter: fileFilter,
+      limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+    });
+
+    self.app.post('/api/backgrounds', upload.single('file'), (req, res) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+        const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov'];
+        const ext = path.extname(req.file.filename).toLowerCase().slice(1);
+        
+        let fileType = 'unknown';
+        if (imageExts.includes(ext)) {
+          fileType = 'image';
+        } else if (videoExts.includes(ext)) {
+          fileType = 'video';
+        }
+
+        self.logger.info(`[SpectrumWeb] Background file uploaded: ${req.file.filename} (${fileType})`);
+        
+        res.json({ 
+          success: true, 
+          filename: req.file.filename,
+          type: fileType,
+          size: req.file.size,
+          message: 'File uploaded successfully'
+        });
+      } catch (e) {
+        self.logger.error('[SpectrumWeb] Error uploading background:', e.message);
         res.status(500).json({ error: e.message });
       }
     });
