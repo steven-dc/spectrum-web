@@ -87,7 +87,7 @@ export function applyBackground() {
     if (state.bgVideo && state.bgVideo.parentNode) {
         state.bgVideo.pause();
         state.bgVideo.src = '';
-        state.bgVideo.parentNode.removeChild(bgVideo);
+        state.bgVideo.parentNode.removeChild(state.bgVideo);
         state.bgVideo = null;
     }
 
@@ -139,14 +139,14 @@ export function applyBackground() {
             state.bgVideo.style.zIndex = '0';
             state.bgVideo.style.pointerEvents = 'none';
 
-            bgLayer.appendChild(bgVideo);
+            bgLayer.appendChild(state.bgVideo);
 
             state.bgVideo.src = `backgrounds/${encodeURIComponent(videoFile)}`;
             state.bgVideo.play()
                 .then(() => console.log('[BG] Video playing:', videoFile))
                 .catch(e => console.error('[BG] Video play error:', e));
 
-            state.currentBackground = bgVideo;
+            state.currentBackground = state.bgVideo;
         } else {
             const imageFile = chosen.file;
             const imageUrl = `backgrounds/${encodeURIComponent(imageFile)}`;

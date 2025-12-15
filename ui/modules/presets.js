@@ -107,6 +107,7 @@ export function getCurrentSettings() {
 }
 
 export function applyPreset(preset) {
+    const audioMotion = window.appState?.audioMotion;
     if (!preset || !audioMotion) return;
 
     console.log('[Preset] Applying:', preset);

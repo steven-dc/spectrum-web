@@ -16,7 +16,7 @@ export async function startAudio() {
     try {
         if (!state.sharedAudioContext) {
             state.sharedAudioContext = new (window.AudioContext || window.webkitAudioContext)({
-                sampleRate: audioFormat.sampleRate || 44100
+                sampleRate: state.audioFormat.sampleRate || 44100
             });
         }
 
@@ -28,7 +28,7 @@ export async function startAudio() {
             throw new Error('AudioContext not running');
         }
         state.pcmPlayer = new PCMPlayer(state.audioFormat, state.sharedAudioContext);
-        window.state.pcmPlayer = pcmPlayer;
+        state.pcmPlayer = pcmPlayer;
         if (state.audioMotion && pcmPlayer) {
             state.audioMotion.connectInput(state.pcmPlayer.getSourceNode());
         }

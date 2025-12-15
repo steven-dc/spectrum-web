@@ -68,7 +68,7 @@ export function connectWebSocket() {
                             channels: data.channels,
                             bitsPerSample: data.bitsPerSample
                         };
-                        console.log('[WS] Format:', audioFormat);
+                        console.log('[WS] Format:', state.audioFormat);
                         console.log('[WS] Ready for audio. Show prompt for user to start.');
 
                         // Show prompt for user to start audio (requires user gesture)
