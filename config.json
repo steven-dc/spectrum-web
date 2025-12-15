@@ -1,0 +1,7 @@
+{
+  "appPort": 8090,
+  "wsPort": 9001,
+  "fifoPath": "/tmp/mpd.fifo",
+  "kioskEnabled": false,
+  "kioskUrl": "http://localhost:8090"
+}

@@ -1,0 +1,24 @@
+{
+  "name": "spectrum-web",
+  "version": "1.0.0",
+  "description": "Volumio Spectrum Analyzer with Web UI",
+  "main": "index.js",
+  "author": "CuongDao",
+  "license": "MIT",
+  "volumio_info": {
+    "prettyName": "Spectrum Web",
+    "plugin_type": "user_interface",
+    "icon": "fa-bar-chart",
+    "boot_priority": 1
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "fs-extra": "^11.1.1",
+    "kew": "^0.7.0",
+    "v-conf": "^1.0.1",
+    "ws": "^8.13.0"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

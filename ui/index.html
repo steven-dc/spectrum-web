@@ -1,0 +1,1880 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Volumio Spectrum Analyzer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #0a0e14;
+            font-family: Inter, sans-serif;
+            color: #e8e8e8;
+            overflow: hidden;
+        }
+
+        #canvasContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0e14;
+            transition: right 0.3s ease;
+            overflow: hidden;
+            display: block;
+            z-index: 0;
+        }
+
+        #canvasContainer.with-panel {
+            right: 380px;
+        }
+
+        #backgroundLayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-color: #0a0e14;
+            z-index: 0;
+            transition: filter 0.3s ease;
+        }
+
+        #canvasContainer canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            display: block;
+        }
+
+        /* Control Bar */
+        #controlBar {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+            transition: right 0.3s ease;
+        }
+
+        #controlBar.with-panel {
+            right: 396px;
+        }
+
+        #controlBar.with-queue {
+            right: 416px;
+        }
+
+        #controlBar.with-panel.with-queue {
+            right: 796px;
+        }
+
+        .control-item {
+            background: rgba(26, 30, 37, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(45, 49, 57, 0.8);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #status {
+            font-weight: 600;
+            padding: 10px 16px;
+        }
+
+        #status.connected {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        #status.disconnected {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        #status.connecting {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border-color: rgba(251, 191, 36, 0.3);
+        }
+
+        #fpsCounter {
+            color: #4ade80;
+            font-family: 'Courier New', monospace;
+        }
+
+        #toggleSettings {
+            padding: 10px 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        #toggleSettings:hover {
+            background: rgba(102, 126, 234, 0.15);
+            border-color: rgba(102, 126, 234, 0.4);
+        }
+
+        #toggleSettings:active {
+            transform: scale(0.95);
+        }
+
+        /* Now Playing */
+        #nowPlaying {
+            position: fixed;
+            /* top: calc(16px + 48px + 12px); */
+            top: 16px;
+            left: 16px;
+            width: 50%;
+            max-width: 800px;
+            min-width: 320px;
+            background: rgba(0, 0, 0, 0);
+            backdrop-filter: blur(20px);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(45, 49, 57, 0.8);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            cursor: grab;
+            transition: opacity 0.28s ease, transform 0.28s ease;
+            z-index: 99;
+        }
+
+        #nowPlaying.dragging {
+            cursor: grabbing;
+        }
+
+        #nowPlaying.hidden {
+            display: none;
+        }
+
+        #nowPlaying.hidden-by-css {
+            display: none;
+        }
+
+        /* Resize handles */
+        #nowPlaying .resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(0, 0, 0, 1);
+            border-radius: 3px;
+            z-index: 101;
+        }
+
+        #nowPlaying .resize-br { /* bottom-right */
+            right: 6px;
+            bottom: 6px;
+            cursor: se-resize;
+        }
+
+        #nowPlaying .resize-bl { /* bottom-left */
+            left: 6px;
+            bottom: 6px;
+            cursor: sw-resize;
+        }
+
+        #nowPlaying .resize-tr { /* top-right */
+            right: 6px;
+            top: 6px;
+            cursor: ne-resize;
+        }
+
+        #nowPlaying .resize-tl { /* top-left */
+            left: 6px;
+            top: 6px;
+            cursor: nw-resize;
+        }
+
+        .player-container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .track-art {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #1a1e25 0%, #252933 100%);
+            overflow: hidden;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .track-art img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .track-details {
+            flex: 1;
+            min-width: 200px;
+            margin-right: 16px;
+        }
+
+        .track-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .track-artist {
+            font-size: 13px;
+            color: #8b9dc3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .track-progress {
+            margin-top: 8px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(45, 49, 57, 0.6);
+            border-radius: 2px;
+            overflow: hidden;
+            cursor: pointer;
+            margin-bottom: 4px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+            transition: width 0.3s linear;
+            width: 0%;
+        }
+
+        .progress-time {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #6b7688;
+        }
+
+        .track-album {
+            font-size: 11px;
+            color: #6b7688;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .player-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .control-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            color: #667eea;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .control-btn:hover {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .control-btn:active {
+            transform: translateY(0) scale(0.95);
+        }
+
+        .control-btn.play {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            border: none;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .control-btn.play:hover {
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+        }
+
+        /* Click Prompt */
+        #clickPrompt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 14, 20, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            animation: fadeIn 0.3s ease;
+        }
+
+        #clickPrompt.hidden {
+            display: none;
+        }
+
+        #clickPrompt h3 {
+            font-size: 32px;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        #clickPrompt p {
+            font-size: 16px;
+            color: #8b9dc3;
+            margin-bottom: 24px;
+        }
+
+        #clickPrompt button {
+            padding: 16px 32px;
+            font-size: 16px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: #fff;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s;
+        }
+
+        #clickPrompt button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5);
+        }
+
+        #clickPrompt button:active {
+            transform: translateY(0);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Settings Panel */
+        #settingsPanel {
+            position: fixed;
+            right: -380px;
+            top: 0;
+            width: 380px;
+            height: 100%;
+            background: #151921;
+            border-left: 1px solid #2d3139;
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 50;
+            transition: right 0.3s ease;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        #settingsPanel.show {
+            right: 0;
+        }
+
+        #settingsPanel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #settingsPanel::-webkit-scrollbar-track {
+            background: #1a1e25;
+        }
+
+        #settingsPanel::-webkit-scrollbar-thumb {
+            background: #3d4451;
+            border-radius: 4px;
+        }
+
+        #settingsPanel,
+        #queuePanel {
+            position: fixed;
+            right: -400px;
+            top: 0;
+            width: 380px;
+            height: 100%;
+            background: #151921;
+            border-left: 1px solid #2d3139;
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 50;
+            transition: right 0.3s ease;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        #queuePanel {
+            width: 400px;
+            right: -400px;
+            z-index: 60;
+        }
+
+        #settingsPanel.show,
+        #queuePanel.show {
+            right: 0;
+        }
+
+        #settingsPanel::-webkit-scrollbar,
+        #queuePanel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #settingsPanel::-webkit-scrollbar-track,
+        #queuePanel::-webkit-scrollbar-track {
+            background: #1a1e25;
+        }
+
+        #settingsPanel::-webkit-scrollbar-thumb,
+        #queuePanel::-webkit-scrollbar-thumb {
+            background: #3d4451;
+            border-radius: 4px;
+        }
+
+        /* Queue Items */
+        .queue-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #1a1e25;
+            border: 1px solid #2d3139;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .queue-item:hover {
+            background: #1f242d;
+            border-color: #667eea;
+            transform: translateX(4px);
+        }
+
+        .queue-item.playing {
+            background: rgba(102, 126, 234, 0.1);
+            border-color: #667eea;
+            box-shadow: 0 0 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .queue-item-index {
+            font-size: 12px;
+            font-weight: 600;
+            color: #667eea;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .queue-item.playing .queue-item-index {
+            color: #fbbf24;
+        }
+
+        .queue-item-art {
+            width: 50px;
+            height: 50px;
+            border-radius: 6px;
+            background: #252933;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .queue-item-art img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .queue-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .queue-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #e8e8e8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 4px;
+        }
+
+        .queue-item-artist {
+            font-size: 12px;
+            color: #8b9dc3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #2d3139;
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .close-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #f87171;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .settings-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #2d3139;
+        }
+
+        .settings-tabs button {
+            background: transparent;
+            border: none;
+            padding: 12px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #8b9dc3;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .settings-tabs button:hover {
+            color: #fff;
+        }
+
+        .settings-tabs button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        h2 {
+            font-size: 13px;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            color: #8b9dc3;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        h2:first-child {
+            margin-top: 0;
+        }
+
+        label {
+            display: block;
+            margin-top: 12px;
+            font-size: 13px;
+            color: #c5d1e8;
+        }
+
+        select,
+        input[type="text"],
+        input[type="number"] {
+            width: 100%;
+            padding: 10px 12px;
+            margin-top: 6px;
+            background: #1a1e25;
+            border: 1px solid #2d3139;
+            color: #e8e8e8;
+            border-radius: 8px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        select:focus,
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: #1f242d;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-top: 8px;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: #2d3139;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(102, 126, 234, 0.4);
+        }
+
+        input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px 16px;
+            margin-top: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            box-shadow: none;
+        }
+
+        button.secondary:hover {
+            background: rgba(102, 126, 234, 0.2);
+        }
+
+        .settings-group {
+            background: #1a1e25;
+            padding: 16px;
+            border-radius: 12px;
+            margin-top: 16px;
+            border: 1px solid #2d3139;
+        }
+
+        .value-display {
+            float: right;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .custom-radio-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+            gap: 0;
+            margin-top: 6px;
+        }
+
+        .custom-radio-buttons input {
+            display: none;
+        }
+
+        .custom-radio-buttons label {
+            background: linear-gradient(180deg, #4b4b4b, #2f2f2f);
+            border: 1px solid #555;
+            padding: 8px 12px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 400;
+            transition: all 0.2s;
+            color: #ccc;
+        }
+
+        .custom-radio-buttons label:first-of-type {
+            border-radius: 8px 0 0 8px;
+        }
+
+        .custom-radio-buttons label:last-of-type {
+            border-radius: 0 8px 8px 0;
+        }
+
+        .custom-radio-buttons label:not(:last-of-type) {
+            border-right-width: 0;
+        }
+
+        .custom-radio-buttons label:hover {
+            background: linear-gradient(180deg, #5d6f4a, #3b4a2a);
+            border-color: #72aa00;
+            color: #fff;
+        }
+
+        .custom-radio-buttons input:checked+label {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+            box-shadow: 0 0 8px #667eea;
+            color: #fff;
+            font-weight: 600;
+            z-index: 1;
+        }
+
+        .switch-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0;
+            margin-top: 6px;
+        }
+
+        .switch {
+            background: linear-gradient(180deg, #4b4b4b, #2f2f2f);
+            border: 1px solid #555;
+            border-left-width: 0;
+            padding: 8px 12px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            font-weight: 400;
+            transition: all 0.2s;
+            flex: 1 1 50%;
+            min-width: 0;
+            color: #ccc;
+        }
+
+        .switch:nth-child(odd) {
+            border-left-width: 1px;
+            border-radius: 8px 0 0 8px;
+        }
+
+        .switch:nth-child(2n) {
+            border-radius: 0 8px 8px 0;
+        }
+
+        .switch:last-child:nth-child(odd) {
+            border-radius: 8px;
+            flex: 1 1 100%;
+        }
+
+        .switch:not([data-active="1"]):hover {
+            background: linear-gradient(180deg, #5d6f4a, #3b4a2a);
+            border-color: #72aa00;
+            color: #fff;
+        }
+
+        .switch[data-active="1"] {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+            box-shadow: 0 0 8px #667eea;
+            color: #fff;
+            font-weight: 600;
+            z-index: 1;
+        }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .preset-grid button {
+            margin: 0;
+        }
+
+        #clickPrompt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(26, 30, 37, 0.98);
+            backdrop-filter: blur(20px);
+            padding: 40px 50px;
+            border-radius: 20px;
+            border: 1px solid #2d3139;
+            text-align: center;
+            z-index: 200;
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+        }
+
+        #clickPrompt h3 {
+            color: #fff;
+            margin-bottom: 12px;
+            font-size: 24px;
+        }
+
+        #clickPrompt p {
+            color: #8b9dc3;
+            margin-bottom: 24px;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        #clickPrompt button {
+            margin-top: 0;
+            font-size: 15px;
+            padding: 14px 32px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            #canvasContainer.with-panel {
+                right: 0;
+            }
+
+            #controlBar.with-panel {
+                right: 16px;
+            }
+
+            #settingsPanel {
+                width: 100%;
+                right: -100%;
+            }
+
+            .custom-radio-buttons {
+                grid-template-columns: 1fr;
+            }
+
+            .custom-radio-buttons label {
+                border-radius: 8px !important;
+                border-right-width: 1px !important;
+                margin-bottom: 4px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Control Bar -->
+    <div id="controlBar">
+        <div id="fpsCounter" class="control-item">FPS: -- | Packets: 0</div>
+        <div id="status" class="control-item connecting">● Connecting</div>
+        <div id="toggleSettings" class="control-item" onclick="toggleSettings()">⚙️</div>
+    </div>
+
+    <!-- Canvas Container -->
+    <div id="canvasContainer">
+        <div id="backgroundLayer"></div>
+    </div>
+
+    <!-- Now Playing -->
+    <div id="nowPlaying" class="hidden">
+        <div class="resize-handle resize-tl"></div>
+        <div class="resize-handle resize-tr"></div>
+        <div class="resize-handle resize-bl"></div>
+        <div class="resize-handle resize-br"></div>
+        <div class="player-container">
+            <div class="track-art">
+                <img id="trackArt" src="" alt="">
+            </div>
+            <div class="track-details">
+                <div class="track-title" id="trackTitle">No track playing</div>
+                <div class="track-artist" id="trackArtist">Unknown Artist</div>
+                <div class="track-album" id="trackAlbum">Unknown Album</div>
+                <div class="track-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-time">
+                        <span id="currentTime">0:00</span>
+                        <span id="duration">0:00</span>
+                    </div>
+                </div>
+            </div>
+            <div class="player-controls">
+                <div class="control-btn" onclick="volumioPrevious()" title="Previous">⮜</div>
+                <div class="control-btn play" id="playPauseBtn" onclick="volumioTogglePlay()" title="Play/Pause">▶</div>
+                <div class="control-btn" onclick="volumioNext()" title="Next">⮞</div>
+                <div class="control-btn" onclick="toggleQueue()" title="Queue">☰</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Click Prompt -->
+    <div id="clickPrompt" class="hidden">
+        <h3>🎧 Audio Ready</h3>
+        <p>Click to start audio playback and visualization</p>
+        <button id="startAudioBtn">Start Audio</button>
+    </div>
+
+    <div id="queuePanel">
+        <div class="panel-header">
+            <div class="panel-title">🎵 Play Queue</div>
+            <div class="close-btn" onclick="toggleQueue()">×</div>
+        </div>
+        <div id="queueList"></div>
+    </div>
+    <!-- Settings Panel -->
+    <div id="settingsPanel">
+        <div class="panel-header">
+            <div class="panel-title">⚙️ Settings</div>
+            <div class="close-btn" onclick="toggleSettings()">×</div>
+        </div>
+
+        <div class="settings-tabs">
+            <button class="tab-btn active" onclick="switchTab('basic')">Basic</button>
+            <button class="tab-btn" onclick="switchTab('advanced')">Advanced</button>
+            <button class="tab-btn" onclick="switchTab('config')">Config</button>
+            <button class="tab-btn" onclick="switchTab('random')">Random</button>
+        </div>
+
+        <!-- BASIC TAB -->
+        <div id="basic-tab" class="tab-content active">
+            <!-- Presets -->
+            <div class="settings-group">
+                <h2>💾 Presets</h2>
+                <select id="presetSelect">
+                    <option value="">-- Select Preset --</option>
+                </select>
+                <div class="preset-grid">
+                    <button onclick="applySelectedPreset()">Apply</button>
+                    <button class="secondary" onclick="savePreset()">Save</button>
+                </div>
+            </div>
+
+            <!-- Analyzer Mode -->
+            <div class="settings-group">
+                <h2>🎵 Analyzer Mode</h2>
+                <form id="modeSelect">
+                    <select id="mode">
+                        <option value="0">Discrete frequencies</option>
+                        <option value="1">Bars 1/12th octave</option>
+                        <option value="2">Bars 1/8th octave</option>
+                        <option value="3">Bars 1/6th octave</option>
+                        <option value="4">Bars 1/4th octave</option>
+                        <option value="5">Bars 1/3rd octave</option>
+                        <option value="6">Bars Half octave</option>
+                        <option value="7">Bars Full octave</option>
+                        <option value="8">Bars Line graph</option>
+                        <option value="10">Graph</option>
+                    </select>
+                </form>
+            </div>
+
+            <!-- Gradients -->
+            <div class="settings-group">
+                <h2>🎨 Gradients</h2>
+                <label>Left/Main Gradient</label>
+                <select id="gradient"></select>
+
+                <label style="margin-top: 12px;">Right Gradient</label>
+                <select id="gradientRight"></select>
+
+                <div class="switch-bar" style="margin-top: 12px;">
+                    <div class="switch" id="linkGrads" data-active="0">LINK</div>
+                    <div class="switch" id="splitGrad" data-active="0">SPLIT</div>
+                </div>
+            </div>
+
+            <!-- Bar Color Mode -->
+            <div class="settings-group">
+                <h2>🌈 Bar Color Mode</h2>
+                <form id="colorModeSelect" class="custom-radio-buttons">
+                    <input type="radio" name="colorMode" value="gradient" id="color-gradient" checked>
+                    <label for="color-gradient">Gradient</label>
+                    <input type="radio" name="colorMode" value="bar-index" id="color-index">
+                    <label for="color-index">Index</label>
+                    <input type="radio" name="colorMode" value="bar-level" id="color-level">
+                    <label for="color-level">Level</label>
+                </form>
+            </div>
+
+            <!-- Bar Adjustments -->
+            <div class="settings-group">
+                <h2>📏 Bar Adjustments</h2>
+
+                <label>
+                    Bar Spacing: <span class="value-display" id="barSpaceValue">0.10</span>
+                </label>
+                <input id="barSpace" type="range" min="0" max="1" step="0.05" value="0.1">
+
+                <label>
+                    Fill Alpha: <span class="value-display" id="fillAlphaValue">0.30</span>
+                </label>
+                <input id="fillAlpha" type="range" min="0" max="1" step="0.05" value="0.3">
+
+                <label>
+                    Line Width: <span class="value-display" id="lineWidthValue">0</span>
+                </label>
+                <input id="lineWidth" type="range" min="0" max="3" step="0.5" value="0">
+            </div>
+
+            <!-- Sensitivity -->
+            <div class="settings-group">
+                <h2>🎚️ Sensitivity</h2>
+                <form id="sensitivitySelect" class="custom-radio-buttons">
+                    <input type="radio" name="sensitivity" value="0" id="sens-low">
+                    <label for="sens-low">Low</label>
+                    <input type="radio" name="sensitivity" value="1" id="sens-med" checked>
+                    <label for="sens-med">Medium</label>
+                    <input type="radio" name="sensitivity" value="2" id="sens-high">
+                    <label for="sens-high">High</label>
+                </form>
+            </div>
+
+            <!-- Effects -->
+            <div class="settings-group">
+                <h2>✨ Effects</h2>
+                <div class="switch-bar">
+                    <div class="switch" id="alphaBars" data-active="0">Alpha</div>
+                    <div class="switch" id="lumiBars" data-active="0">Lumi</div>
+                    <div class="switch" id="ledBars" data-active="0">LEDs</div>
+                    <div class="switch" id="outlineBars" data-active="0">Outline</div>
+                    <div class="switch" id="radial" data-active="0">Radial</div>
+                    <div class="switch" id="roundBars" data-active="0">Round</div>
+                </div>
+            </div>
+
+            <!-- Reflex -->
+            <div class="settings-group">
+                <h2>🔄 Reflex</h2>
+                <form id="reflexSelect" class="custom-radio-buttons">
+                    <input type="radio" name="reflex" value="0" id="reflex-off" checked>
+                    <label for="reflex-off">Off</label>
+                    <input type="radio" name="reflex" value="3" id="reflex-25">
+                    <label for="reflex-25">25%</label>
+                    <input type="radio" name="reflex" value="1" id="reflex-40">
+                    <label for="reflex-40">40%</label>
+                    <input type="radio" name="reflex" value="2" id="reflex-mirror">
+                    <label for="reflex-mirror">Mirror</label>
+                </form>
+            </div>
+
+            <!-- Scale Labels -->
+            <div class="settings-group">
+                <h2>📊 Scale Labels</h2>
+                <label>X-Axis Labels</label>
+                <form id="scaleXSelect" class="custom-radio-buttons">
+                    <input type="radio" name="scaleX" value="0" id="scaleX-off">
+                    <label for="scaleX-off">Off</label>
+                    <input type="radio" name="scaleX" value="1" id="scaleX-freq" checked>
+                    <label for="scaleX-freq">Freqs</label>
+                    <input type="radio" name="scaleX" value="2" id="scaleX-notes">
+                    <label for="scaleX-notes">Notes</label>
+                </form>
+
+                <label style="margin-top: 12px;">Y-Axis Labels</label>
+                <form id="scaleYSelect" class="custom-radio-buttons">
+                    <input type="radio" name="scaleY" value="0" id="scaleY-off" checked>
+                    <label for="scaleY-off">Off</label>
+                    <input type="radio" name="scaleY" value="1" id="scaleY-on">
+                    <label for="scaleY-on">On</label>
+                </form>
+            </div>
+        </div>
+
+        <!-- ADVANCED TAB -->
+        <div id="advanced-tab" class="tab-content">
+            <!-- Channel Layout -->
+            <div class="settings-group">
+                <h2>📡 Channel Layout</h2>
+                <select id="channelLayout">
+                    <option value="single">Single</option>
+                    <option value="dual-combined">Dual Combined</option>
+                    <option value="dual-horizontal">Dual Horizontal</option>
+                    <option value="dual-vertical">Dual Vertical</option>
+                </select>
+            </div>
+
+            <!-- Mirror -->
+            <div class="settings-group">
+                <h2>🪞 Mirror</h2>
+                <form id="mirrorSelect" class="custom-radio-buttons">
+                    <input type="radio" name="mirror" value="-1" id="mirror-left">
+                    <label for="mirror-left">Left</label>
+                    <input type="radio" name="mirror" value="0" id="mirror-off" checked>
+                    <label for="mirror-off">Off</label>
+                    <input type="radio" name="mirror" value="1" id="mirror-right">
+                    <label for="mirror-right">Right</label>
+                </form>
+            </div>
+
+            <!-- Frequency Settings -->
+            <div class="settings-group">
+                <h2>🎼 Frequency Settings</h2>
+
+                <label>Frequency Scale</label>
+                <form id="freqScaleSelect" class="custom-radio-buttons">
+                    <input type="radio" name="freqScale" value="bark" id="scale-bark">
+                    <label for="scale-bark">Bark</label>
+                    <input type="radio" name="freqScale" value="linear" id="scale-linear">
+                    <label for="scale-linear">Linear</label>
+                    <input type="radio" name="freqScale" value="log" id="scale-log" checked>
+                    <label for="scale-log">Log</label>
+                    <input type="radio" name="freqScale" value="mel" id="scale-mel">
+                    <label for="scale-mel">Mel</label>
+                </form>
+
+                <label style="margin-top: 12px;">
+                    Frequency Range: <span class="value-display" id="freqRangeValue">20Hz - 22kHz</span>
+                </label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+                    <input id="minFreq" type="number" placeholder="Min (Hz)" value="20" style="margin: 0;">
+                    <input id="maxFreq" type="number" placeholder="Max (Hz)" value="22000" style="margin: 0;">
+                </div>
+            </div>
+
+
+
+            <!-- Radial Settings -->
+            <div class="settings-group">
+                <h2>⭕ Radial Settings</h2>
+
+                <label>
+                    Radius: <span class="value-display" id="radiusValue">0.30</span>
+                </label>
+                <input id="radius" type="range" min="0" max="1" step="0.05" value="0.3">
+
+                <label>
+                    Spin Speed: <span class="value-display" id="spinSpeedValue">0 RPM</span>
+                </label>
+                <input id="spinSpeed" type="range" min="-10" max="10" step="1" value="0">
+            </div>
+
+            <!-- FFT Settings -->
+            <div class="settings-group">
+                <h2>🔬 FFT Analysis</h2>
+
+                <label>FFT Size</label>
+                <select id="fftSize">
+                    <option value="2048">2048</option>
+                    <option value="4096">4096</option>
+                    <option value="8192" selected>8192</option>
+                    <option value="16384">16384</option>
+                </select>
+
+                <label>
+                    Smoothing: <span class="value-display" id="smoothingValue">0.70</span>
+                </label>
+                <input id="smoothing" type="range" min="0" max="0.9" step="0.05" value="0.7">
+
+                <label style="margin-top: 12px;">Octave Bands</label>
+                <form id="ansiBandsSelect" class="custom-radio-buttons">
+                    <input type="radio" name="ansiBands" value="0" id="bands-tempered" checked>
+                    <label for="bands-tempered">Tempered</label>
+                    <input type="radio" name="ansiBands" value="1" id="bands-ansi">
+                    <label for="bands-ansi">ANSI/IEC</label>
+                </form>
+
+                <label style="margin-top: 12px;">Level Scale</label>
+                <form id="linearAmplitudeSelect" class="custom-radio-buttons">
+                    <input type="radio" name="linearAmplitude" value="0" id="ampl-db">
+                    <label for="ampl-db">Decibels</label>
+                    <input type="radio" name="linearAmplitude" value="1" id="ampl-linear" checked>
+                    <label for="ampl-linear">Linear</label>
+                </form>
+
+                <label style="margin-top: 12px;">Weighting Filter</label>
+                <select id="weightingFilter">
+                    <option value="">Off</option>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="D">D</option>
+                    <option value="468">468</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- CONFIGURATION TAB -->
+        <div id="config-tab" class="tab-content">
+            <!-- Peak Settings -->
+            <div class="settings-group">
+                <h2>⛰️ Peak Behavior</h2>
+
+                <label>
+                    Gravity: <span class="value-display" id="gravityValue">3.80</span>
+                </label>
+                <input id="gravity" type="range" min="0.01" max="25" step="0.01" value="3.8">
+
+                <label>
+                    Peak Fade Time: <span class="value-display" id="peakFadeValue">750ms</span>
+                </label>
+                <input id="peakFade" type="range" min="0" max="5000" step="50" value="750">
+
+                <label>
+                    Peak Hold Time: <span class="value-display" id="peakHoldValue">500ms</span>
+                </label>
+                <input id="peakHold" type="range" min="0" max="5000" step="50" value="500">
+            </div>
+
+            <!-- Display Options -->
+            <div class="settings-group">
+                <h2>👁️ Display Options</h2>
+                <div class="switch-bar">
+                    <div class="switch" id="showSong" data-active="1">Track Info</div>
+                    <div class="switch" id="showFPS" data-active="0">FPS</div>
+                    <div class="switch" id="loRes" data-active="0">Lo-Res</div>
+                </div>
+            </div>
+
+            <!-- General Settings -->
+            <div class="settings-group">
+                <h2>⚙️ General</h2>
+
+                <label>Max FPS</label>
+                <select id="maxFPS">
+                    <option value="30">30</option>
+                    <option value="60" selected>60</option>
+                    <option value="0">Unlimited</option>
+                </select>
+
+                <label>
+                    Fullscreen Height: <span class="value-display" id="fsHeightValue">100%</span>
+                </label>
+                <input id="fsHeight" type="range" min="25" max="100" step="5" value="100">
+
+                <label><input type="checkbox" id="autoHide"> Auto-hide panel on hover</label>
+            </div>
+
+            <!-- Background Settings -->
+            <div class="settings-group">
+                <h2>🖼️ Background</h2>
+
+                <label>Background Type</label>
+                <select id="bgType">
+                    <option value="none">None (Gradient)</option>
+                    <option value="cover">Album Cover</option>
+                    <option value="file">Background File</option>
+                </select>
+
+                <label id="bgFileLabel" style="display: none;">Select File</label>
+                <select id="bgFile" style="display: none;">
+                    <option value="">-- Select File --</option>
+                </select>
+
+                <label>
+                    Background Dim: <span class="value-display" id="bgDimValue">0.5</span>
+                </label>
+                <input id="bgDim" type="range" min="0" max="1" step="0.1" value="0.5">
+
+                <label>Image Fit</label>
+                <select id="bgFit">
+                    <option value="cover">Cover</option>
+                    <option value="contain">Contain</option>
+                    <option value="fill">Fill</option>
+                </select>
+
+                <button class="secondary" onclick="refreshBackgroundFiles()">🔄 Refresh Files</button>
+            </div>
+
+            <div class="settings-group">
+                <h2>👁️ UI Visibility</h2>
+                <label><input type="checkbox" id="showControlBar" checked> Show Control Bar</label>
+                <label><input type="checkbox" id="showNowPlaying" checked> Show Now Playing</label>
+            </div>
+
+            <div class="settings-group">
+                <h2>🎛️ Now Playing Layout</h2>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <label>X (px)</label>
+                        <input id="npX" type="number" min="0" value="16">
+                    </div>
+                    <div>
+                        <label>Y (px)</label>
+                        <input id="npY" type="number" min="0" value="16">
+                    </div>
+                    <div>
+                        <label>Width (px)</label>
+                        <input id="npW" type="number" min="320" value="600">
+                    </div>
+                    <div>
+                        <label>Height (px)</label>
+                        <input id="npH" type="text" min="100" value="auto" placeholder="auto">
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button class="secondary" id="applyNowPlayingLayoutBtn">Apply</button>
+                    <button class="secondary" id="resetNowPlayingLayoutBtn">Reset</button>
+                </div>
+            </div>
+            <!-- Bar Adjustments -->
+            <div class="settings-group">
+                <h2>📏 Volume</h2>
+
+                <label>
+                    Volume: <span class="value-display" id="volumeValue">0.00</span>
+                </label>
+                <input id="volume" type="range" min="0" max="1" step="0.05" value="0">
+
+            </div>
+            <!-- Update Settings on Server -->
+            <div class="settings-group">
+                <h2>⬆️ Update setting on server</h2>
+                <button id="uploadSettingsBtn" onclick="uploadSettings()">⬆️ Update setting on server</button>
+            </div>
+        </div>
+
+        <!-- RANDOM TAB -->
+        <div id="random-tab" class="tab-content">
+            <!-- Random Options -->
+            <div class="settings-group">
+                <h2>🎲 Randomize Options</h2>
+                <label><input type="checkbox" id="randomMode"> Analyzer Mode</label>
+                <label><input type="checkbox" id="randomGradient"> Left/Main Gradient</label>
+                <label><input type="checkbox" id="randomGradientRight"> Right Gradient</label>
+                <label><input type="checkbox" id="randomColorMode"> Bar Color Mode</label>
+                <label><input type="checkbox" id="randomBarSpace"> Bar Spacing</label>
+                <label><input type="checkbox" id="randomFillAlpha"> Fill Alpha</label>
+                <label><input type="checkbox" id="randomLineWidth"> Line Width</label>
+                <label><input type="checkbox" id="randomSensitivity"> Sensitivity</label>
+                <label><input type="checkbox" id="randomMirror"> Mirror</label>
+                <label><input type="checkbox" id="randomAlphaBars"> Alpha Bars</label>
+                <label><input type="checkbox" id="randomLumiBars"> Lumi Bars</label>
+                <label><input type="checkbox" id="randomLedBars"> LED Bars</label>
+                <label><input type="checkbox" id="randomOutlineBars"> Outline Bars</label>
+                <label><input type="checkbox" id="randomRadial"> Radial</label>
+                <label><input type="checkbox" id="randomRoundBars"> Round Bars</label>
+                <label><input type="checkbox" id="randomBgType"> Background Type</label>
+                <label><input type="checkbox" id="randomBgFile"> Background File</label>
+                <label><input type="checkbox" id="randomBgFit"> Background Fit</label>
+            </div>
+
+            <!-- Random Triggers -->
+            <div class="settings-group">
+                <h2>⏱️ Random Triggers</h2>
+                
+                <label><input type="checkbox" id="randomOnTrackChange"> Randomize on track change</label>
+                
+                <label style="margin-top: 16px;">
+                    <input type="checkbox" id="randomOnInterval"> Randomize every
+                </label>
+                <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
+                    <input id="randomInterval" type="number" min="1" max="3600" value="30" style="flex: 1;">
+                    <span style="color: #8b9dc3; font-size: 13px;">seconds</span>
+                </div>
+            </div>
+
+            <!-- Random Actions -->
+            <div class="settings-group">
+                <h2>🎯 Actions</h2>
+                <button onclick="randomizeNow()">🎲 Randomize Now</button>
+                <button class="secondary" onclick="selectAllRandom()">☑️ Select All</button>
+                <button class="secondary" onclick="deselectAllRandom()">☐ Deselect All</button>
+            </div>
+
+            <!-- Random Status -->
+            <div class="settings-group">
+                <h2>📊 Status</h2>
+                <div id="randomStatus" style="font-size: 12px; color: #8b9dc3; padding: 12px; background: #1a1e25; border-radius: 8px;">
+                    <div>Next randomization: <span id="randomNextTime">-</span></div>
+                    <div style="margin-top: 4px;">Last randomization: <span id="randomLastTime">Never</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="audiomotion-analyzer.min.js"></script>
+    <script src="spectrum.js"></script>
+
+    <!-- Random Settings Logic -->
+    <script>
+        (function() {
+            let randomIntervalTimer = null;
+            let lastRandomTime = null;
+            let nextRandomTime = null;
+
+            // Randomize now
+            window.randomizeNow = function() {
+                const options = {
+                    mode: document.getElementById('randomMode')?.checked,
+                    gradient: document.getElementById('randomGradient')?.checked,
+                    gradientRight: document.getElementById('randomGradientRight')?.checked,
+                    colorMode: document.getElementById('randomColorMode')?.checked,
+                    barSpace: document.getElementById('randomBarSpace')?.checked,
+                    fillAlpha: document.getElementById('randomFillAlpha')?.checked,
+                    lineWidth: document.getElementById('randomLineWidth')?.checked,
+                    sensitivity: document.getElementById('randomSensitivity')?.checked,
+                    mirror: document.getElementById('randomMirror')?.checked,
+                    alphaBars: document.getElementById('randomAlphaBars')?.checked,
+                    lumiBars: document.getElementById('randomLumiBars')?.checked,
+                    ledBars: document.getElementById('randomLedBars')?.checked,
+                    outlineBars: document.getElementById('randomOutlineBars')?.checked,
+                    radial: document.getElementById('randomRadial')?.checked,
+                    roundBars: document.getElementById('randomRoundBars')?.checked,
+                    bgType: document.getElementById('randomBgType')?.checked,
+                    bgFile: document.getElementById('randomBgFile')?.checked,
+                    bgFit: document.getElementById('randomBgFit')?.checked
+                };
+
+                applyRandomization(options);
+                updateRandomStatus();
+            };
+
+            function applyRandomization(options) {
+                // Mode
+                if (options.mode) {
+                    const modeSelect = document.getElementById('mode');
+                    const modeOptions = Array.from(modeSelect.options);
+                    const randomMode = modeOptions[Math.floor(Math.random() * modeOptions.length)];
+                    modeSelect.value = randomMode.value;
+                    modeSelect.dispatchEvent(new Event('change'));
+                }
+
+                // Gradient
+                if (options.gradient) {
+                    const gradSelect = document.getElementById('gradient');
+                    const gradOptions = Array.from(gradSelect.options);
+                    const randomGrad = gradOptions[Math.floor(Math.random() * gradOptions.length)];
+                    gradSelect.value = randomGrad.value;
+                    gradSelect.dispatchEvent(new Event('change'));
+                }
+
+                // Gradient Right
+                if (options.gradientRight) {
+                    const gradRightSelect = document.getElementById('gradientRight');
+                    const gradRightOptions = Array.from(gradRightSelect.options);
+                    const randomGradRight = gradRightOptions[Math.floor(Math.random() * gradRightOptions.length)];
+                    gradRightSelect.value = randomGradRight.value;
+                    gradRightSelect.dispatchEvent(new Event('change'));
+                }
+
+                // Color Mode
+                if (options.colorMode) {
+                    const colorModes = ['gradient', 'bar-index', 'bar-level'];
+                    const randomColorMode = colorModes[Math.floor(Math.random() * colorModes.length)];
+                    document.getElementById(`color-${randomColorMode}`)?.click();
+                }
+
+                // Bar Space (0 to 1)
+                if (options.barSpace) {
+                    const barSpaceSlider = document.getElementById('barSpace');
+                    barSpaceSlider.value = (Math.random()).toFixed(2);
+                    barSpaceSlider.dispatchEvent(new Event('input'));
+                }
+
+                // Fill Alpha (0 to 1)
+                if (options.fillAlpha) {
+                    const fillAlphaSlider = document.getElementById('fillAlpha');
+                    fillAlphaSlider.value = (Math.random()).toFixed(2);
+                    fillAlphaSlider.dispatchEvent(new Event('input'));
+                }
+
+                // Line Width (0 to 3)
+                if (options.lineWidth) {
+                    const lineWidthSlider = document.getElementById('lineWidth');
+                    const randomWidth = (Math.random() * 3).toFixed(1);
+                    lineWidthSlider.value = randomWidth;
+                    lineWidthSlider.dispatchEvent(new Event('input'));
+                }
+
+                // Sensitivity
+                if (options.sensitivity) {
+                    const sensLevels = ['0', '1', '2'];
+                    const randomSens = sensLevels[Math.floor(Math.random() * sensLevels.length)];
+                    document.getElementById(`sens-${randomSens === '0' ? 'low' : randomSens === '1' ? 'med' : 'high'}`)?.click();
+                }
+
+                // Mirror
+                if (options.mirror) {
+                    const mirrorValues = ['-1', '0', '1'];
+                    const randomMirror = mirrorValues[Math.floor(Math.random() * mirrorValues.length)];
+                    document.getElementById(`mirror-${randomMirror === '-1' ? 'left' : randomMirror === '0' ? 'off' : 'right'}`)?.click();
+                }
+
+                // Toggle switches
+                const toggles = [
+                    { option: 'alphaBars', id: 'alphaBars' },
+                    { option: 'lumiBars', id: 'lumiBars' },
+                    { option: 'ledBars', id: 'ledBars' },
+                    { option: 'outlineBars', id: 'outlineBars' },
+                    { option: 'radial', id: 'radial' },
+                    { option: 'roundBars', id: 'roundBars' }
+                ];
+
+                toggles.forEach(toggle => {
+                    if (options[toggle.option]) {
+                        const element = document.getElementById(toggle.id);
+                        const randomState = Math.random() > 0.5;
+                        element.setAttribute('data-active', randomState ? '1' : '0');
+                        element.dispatchEvent(new Event('click'));
+                    }
+                });
+
+                // Background Type
+                if (options.bgType) {
+                    const bgTypeSelect = document.getElementById('bgType');
+                    const bgTypeOptions = Array.from(bgTypeSelect.options);
+                    const randomBgType = bgTypeOptions[Math.floor(Math.random() * bgTypeOptions.length)];
+                    bgTypeSelect.value = randomBgType.value;
+                    bgTypeSelect.dispatchEvent(new Event('change'));
+                }
+
+                // Background File
+                if (options.bgFile) {
+                    const bgFileSelect = document.getElementById('bgFile');
+                    const bgFileOptions = Array.from(bgFileSelect.options).filter(opt => opt.value !== '');
+                    if (bgFileOptions.length > 0) {
+                        const randomBgFile = bgFileOptions[Math.floor(Math.random() * bgFileOptions.length)];
+                        bgFileSelect.value = randomBgFile.value;
+                        bgFileSelect.dispatchEvent(new Event('change'));
+                    }
+                }
+
+                // Background Fit
+                if (options.bgFit) {
+                    const bgFitSelect = document.getElementById('bgFit');
+                    const bgFitOptions = Array.from(bgFitSelect.options);
+                    const randomBgFit = bgFitOptions[Math.floor(Math.random() * bgFitOptions.length)];
+                    bgFitSelect.value = randomBgFit.value;
+                    bgFitSelect.dispatchEvent(new Event('change'));
+                }
+
+                lastRandomTime = new Date();
+            }
+
+            function updateRandomStatus() {
+                const lastTimeEl = document.getElementById('randomLastTime');
+                const nextTimeEl = document.getElementById('randomNextTime');
+                
+                if (lastRandomTime) {
+                    lastTimeEl.textContent = lastRandomTime.toLocaleTimeString();
+                }
+
+                if (nextRandomTime) {
+                    nextTimeEl.textContent = nextRandomTime.toLocaleTimeString();
+                } else {
+                    nextTimeEl.textContent = '-';
+                }
+            }
+
+            function startRandomInterval() {
+                stopRandomInterval();
+                
+                const intervalCheckbox = document.getElementById('randomOnInterval');
+                const intervalInput = document.getElementById('randomInterval');
+                
+                if (intervalCheckbox?.checked) {
+                    const seconds = parseInt(intervalInput.value || '30');
+                    nextRandomTime = new Date(Date.now() + seconds * 1000);
+                    updateRandomStatus();
+                    
+                    randomIntervalTimer = setInterval(() => {
+                        randomizeNow();
+                        nextRandomTime = new Date(Date.now() + seconds * 1000);
+                        updateRandomStatus();
+                    }, seconds * 1000);
+                }
+            }
+
+            function stopRandomInterval() {
+                if (randomIntervalTimer) {
+                    clearInterval(randomIntervalTimer);
+                    randomIntervalTimer = null;
+                    nextRandomTime = null;
+                    updateRandomStatus();
+                }
+            }
+
+            // Select/Deselect all
+            window.selectAllRandom = function() {
+                document.querySelectorAll('#random-tab input[type="checkbox"]').forEach(cb => {
+                    if (!cb.id.startsWith('randomOn')) {
+                        cb.checked = true;
+                    }
+                });
+            };
+
+            window.deselectAllRandom = function() {
+                document.querySelectorAll('#random-tab input[type="checkbox"]').forEach(cb => {
+                    if (!cb.id.startsWith('randomOn')) {
+                        cb.checked = false;
+                    }
+                });
+            };
+
+            // Setup event listeners
+            document.getElementById('randomOnInterval')?.addEventListener('change', function() {
+                if (this.checked) {
+                    startRandomInterval();
+                } else {
+                    stopRandomInterval();
+                }
+            });
+
+            document.getElementById('randomInterval')?.addEventListener('change', function() {
+                if (document.getElementById('randomOnInterval')?.checked) {
+                    startRandomInterval();
+                }
+            });
+
+            // Hook into track change (you'll need to call this from your main spectrum.js)
+            window.onTrackChange = function() {
+                if (document.getElementById('randomOnTrackChange')?.checked) {
+                    randomizeNow();
+                }
+            };
+
+            // Update status every second
+            setInterval(updateRandomStatus, 1000);
+        })();
+    </script>
+
+    <!-- Now Playing Drag & Visibility Management -->
+    <script>
+        (function () {
+            const box = document.getElementById("nowPlaying");
+            if (!box) return;
+
+            // Drag functionality
+            let dragging = false;
+            let pos = { x: 0, y: 0 };
+            let mouse = { x: 0, y: 0 };
+
+            function onMouseDown(e) {
+                if (e.target.closest(".control-btn") || e.target.classList.contains('resize-handle')) return;
+                dragging = true;
+                box.classList.add("dragging");
+                mouse.x = e.clientX;
+                mouse.y = e.clientY;
+                const rect = box.getBoundingClientRect();
+                pos.x = rect.left;
+                pos.y = rect.top;
+                e.preventDefault();
+            }
+
+            function onMouseMove(e) {
+                if (!dragging) return;
+                const dx = e.clientX - mouse.x;
+                const dy = e.clientY - mouse.y;
+                box.style.left = pos.x + dx + "px";
+                box.style.top = pos.y + dy + "px";
+                box.style.right = "auto";
+                box.style.bottom = "auto";
+                // update inputs
+                const npX = document.getElementById('npX');
+                const npY = document.getElementById('npY');
+                if (npX) npX.value = Math.round(pos.x + dx);
+                if (npY) npY.value = Math.round(pos.y + dy);
+            }
+
+            function onMouseUp() {
+                if (!dragging) return;
+                dragging = false;
+                box.classList.remove("dragging");
+            }
+
+            box.addEventListener("mousedown", onMouseDown);
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+
+            // Visibility control: respect showNowPlaying checkbox
+            const showCheckbox = document.getElementById('showNowPlaying');
+            if (showCheckbox) {
+                showCheckbox.addEventListener('change', () => {
+                    if (showCheckbox.checked) {
+                        box.classList.remove('hidden-by-css');
+                    } else {
+                        box.classList.add('hidden-by-css');
+                    }
+                });
+            }
+
+            // Resize functionality
+            let resizing = false;
+            let resizeStart = { x: 0, y: 0, w: 0, h: 0, left: 0, top: 0 };
+            let resizeMode = null; // tl, tr, bl, br
+
+            function onResizeDown(e) {
+                const handle = e.target;
+                if (!handle.classList.contains('resize-handle')) return;
+                resizing = true;
+                resizeMode = handle.classList.contains('resize-tl') ? 'tl'
+                    : handle.classList.contains('resize-tr') ? 'tr'
+                    : handle.classList.contains('resize-bl') ? 'bl' : 'br';
+                const rect = box.getBoundingClientRect();
+                resizeStart = { x: e.clientX, y: e.clientY, w: rect.width, h: rect.height, left: rect.left, top: rect.top };
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            function onResizeMove(e) {
+                if (!resizing) return;
+                const dx = e.clientX - resizeStart.x;
+                const dy = e.clientY - resizeStart.y;
+                let newW = resizeStart.w;
+                let newH = resizeStart.h;
+                let newLeft = resizeStart.left;
+                let newTop = resizeStart.top;
+
+                if (resizeMode === 'br') { newW += dx; newH += dy; }
+                else if (resizeMode === 'bl') { newW -= dx; newH += dy; newLeft += dx; }
+                else if (resizeMode === 'tr') { newW += dx; newH -= dy; newTop += dy; }
+                else if (resizeMode === 'tl') { newW -= dx; newH -= dy; newLeft += dx; newTop += dy; }
+
+                // constraints
+                newW = Math.max(320, Math.min(newW, window.innerWidth - 32));
+                newH = Math.max(100, Math.min(newH, window.innerHeight - 32));
+                newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - newW));
+                newTop = Math.max(0, Math.min(newTop, window.innerHeight - newH));
+
+                box.style.width = newW + 'px';
+                box.style.height = newH + 'px';
+                box.style.left = newLeft + 'px';
+                box.style.top = newTop + 'px';
+                box.style.right = 'auto';
+                box.style.bottom = 'auto';
+
+                const npX = document.getElementById('npX');
+                const npY = document.getElementById('npY');
+                const npW = document.getElementById('npW');
+                const npH = document.getElementById('npH');
+                if (npX) npX.value = Math.round(newLeft);
+                if (npY) npY.value = Math.round(newTop);
+                if (npW) npW.value = Math.round(newW);
+                if (npH) npH.value = Math.round(newH);
+            }
+
+            function onResizeUp() {
+                if (!resizing) return;
+                resizing = false;
+            }
+
+            box.addEventListener('mousedown', onResizeDown);
+            document.addEventListener('mousemove', onResizeMove);
+            document.addEventListener('mouseup', onResizeUp);
+
+            // Apply/reset from settings inputs
+            const applyBtn = document.getElementById('applyNowPlayingLayoutBtn');
+            const resetBtn = document.getElementById('resetNowPlayingLayoutBtn');
+            function applyFromInputs() {
+                const npX = document.getElementById('npX');
+                const npY = document.getElementById('npY');
+                const npW = document.getElementById('npW');
+                const npH = document.getElementById('npH');
+                if (!npX || !npY || !npW || !npH) return;
+                const x = parseInt(npX.value || '16');
+                const y = parseInt(npY.value || '16');
+                const w = parseInt(npW.value || '600');
+                const hVal = npH.value;
+                box.style.left = x + 'px';
+                box.style.top = y + 'px';
+                box.style.width = w + 'px';
+                if (hVal && hVal !== 'auto') {
+                    const h = parseInt(hVal);
+                    box.style.height = h + 'px';
+                } else {
+                    box.style.height = '';
+                }
+                box.style.right = 'auto';
+                box.style.bottom = 'auto';
+            }
+            if (applyBtn) applyBtn.addEventListener('click', applyFromInputs);
+            if (resetBtn) resetBtn.addEventListener('click', () => {
+                document.getElementById('npX').value = 16;
+                document.getElementById('npY').value = 16;
+                document.getElementById('npW').value = 600;
+                document.getElementById('npH').value = 'auto';
+                applyFromInputs();
+            });
+        })();
+
+        // Background File visibility toggle
+        (function () {
+            const bgTypeSelect = document.getElementById('bgType');
+            const bgFileLabel = document.getElementById('bgFileLabel');
+            const bgFileSelect = document.getElementById('bgFile');
+
+            function updateFileVisibility() {
+                const isFileSelected = bgTypeSelect.value === 'file';
+                bgFileLabel.style.display = isFileSelected ? 'block' : 'none';
+                bgFileSelect.style.display = isFileSelected ? 'block' : 'none';
+            }
+
+            bgTypeSelect.addEventListener('change', updateFileVisibility);
+            updateFileVisibility();
+        })();
+
+    </script>
+
+</body>
+
+</html>

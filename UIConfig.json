@@ -1,0 +1,1137 @@
+{
+  "page": {
+    "label": "TRANSLATE.SPECTRUM_WEB.CONFIGURATION"
+  },
+  "sections": [
+    {
+      "id": "general",
+      "element": "section",
+      "label": "TRANSLATE.SPECTRUM_WEB.GENERAL_SETTINGS",
+      "icon": "fa-cog",
+      "onSave": {
+        "type": "controller",
+        "endpoint": "user_interface/spectrum-web",
+        "method": "saveGeneralConfig"
+      },
+      "saveButton": {
+        "label": "TRANSLATE.SPECTRUM_WEB.SAVE_SETTINGS",
+        "data": [
+          "appPort",
+          "wsPort",
+          "fifoPath",
+          "kioskEnabled",
+          "kioskUrl"
+        ]
+      },
+      "content": [
+        {
+          "id": "appPort",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.HTTP_PORT",
+          "doc": "Port for HTTP web server (default: 8090)",
+          "value": 8090
+        },
+        {
+          "id": "wsPort",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.WS_PORT",
+          "doc": "Port for WebSocket server (default: 9001)",
+          "value": 9001
+        },
+        {
+          "id": "fifoPath",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.FIFO_PATH",
+          "doc": "Path to MPD FIFO file",
+          "value": "/tmp/mpd.fifo"
+        },
+        {
+          "id": "kioskEnabled",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.KIOSK_ENABLED",
+          "doc": "Enable kiosk mode to display spectrum analyzer in fullscreen",
+          "value": true
+        },
+        {
+          "id": "kioskUrl",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.KIOSK_URL",
+          "doc": "URL to display in kiosk mode (default: http://localhost:8090)",
+          "value": "http://localhost:8090",
+          "visibleIf": {
+            "field": "kioskEnabled",
+            "value": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "analyzer",
+      "element": "section",
+      "label": "TRANSLATE.SPECTRUM_WEB.ANALYZER_SETTINGS",
+      "icon": "fa-sliders",
+      "onSave": {
+        "type": "controller",
+        "endpoint": "user_interface/spectrum-web",
+        "method": "saveAnalyzerConfig"
+      },
+      "saveButton": {
+        "label": "TRANSLATE.SPECTRUM_WEB.SAVE_SETTINGS",
+        "data": [
+          "frequency_header",
+          "mode",
+          "fftSize",
+          "frequencyScale",
+          "minFreq",
+          "maxFreq",
+          "minDecibels",
+          "maxDecibels",
+          "smoothing",
+          "weightingFilter",
+          "visual_header",
+          "colorMode",
+          "gradient",
+          "channelLayout",
+          "gravity",
+          "barSpace",
+          "lineWidth",
+          "peaks_header",
+          "showPeaks",
+          "peakLine",
+          "peakHoldTime",
+          "peakFadeTime",
+          "effects_header",
+          "mirror",
+          "bgAlpha",
+          "fillAlpha",
+          "reflex_header",
+          "reflexAlpha",
+          "reflexBright",
+          "reflexFit",
+          "reflexRatio",
+          "display_header",
+          "showBgColor",
+          "showScaleX",
+          "showScaleY",
+          "showFPS",
+          "performance_header",
+          "maxFPS",
+          "spinSpeed",
+          "bar_styles_header",
+          "roundBars",
+          "outlineBars",
+          "alphaBars",
+          "ledBars",
+          "trueLeds",
+          "lumiBars",
+          "amplitude_header",
+          "linearAmplitude",
+          "linearBoost",
+          "gradientRight",
+          "presetSelect",
+          "bgType",
+          "bgFile",
+          "bgFit",
+          "sensitivity",
+          "reflex",
+          "scaleX",
+          "scaleY",
+          "freqScale",
+          "radius",
+          "ansiBands",
+          "peakFade",
+          "peakHold",
+          "fsHeight",
+          "autoHide",
+          "bgDim",
+          "showControlBar",
+          "showNowPlaying",
+          "wsUrl",
+          "volumioUrl",
+          "importFile",
+          "linkGrads",
+          "splitGrad",
+          "radial",
+          "showSong",
+          "loRes"
+        ]
+      },
+      "content": [
+        {
+          "id": "frequency_header",
+          "element": "section",
+          "label": "TRANSLATE.SPECTRUM_WEB.FREQUENCY_ANALYSIS",
+          "icon": "fa-wave-square",
+          "description": "Configure frequency analysis parameters"
+        },
+        {
+          "id": "mode",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.MODE",
+          "doc": "MODE",
+          "value": {
+            "value": 3,
+            "label": "Bars 1/6th octave"
+          },
+          "options": [
+            {
+              "value": 1,
+              "label": "Bars 1/12th octave"
+            },
+            {
+              "value": 2,
+              "label": "Bars 1/8th octave"
+            },
+            {
+              "value": 3,
+              "label": "Bars 1/6th octave"
+            },
+            {
+              "value": 4,
+              "label": "Bars 1/4th octave"
+            },
+            {
+              "value": 5,
+              "label": "Bars 1/3rd octave"
+            },
+            {
+              "value": 6,
+              "label": "Bars Half octave"
+            },
+            {
+              "value": 7,
+              "label": "Bars Full octave"
+            },
+            {
+              "value": 8,
+              "label": "Bars Line graph"
+            },
+            {
+              "value": 10,
+              "label": "Graphic Equalizer"
+            }
+          ]
+        },
+        {
+          "id": "fftSize",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.FFT_SIZE",
+          "doc": "Higher values = better frequency resolution but more CPU usage",
+          "value": {
+            "value": 8192,
+            "label": "8192"
+          },
+          "options": [
+            {
+              "value": 2048,
+              "label": "2048"
+            },
+            {
+              "value": 4096,
+              "label": "4096"
+            },
+            {
+              "value": 8192,
+              "label": "8192"
+            },
+            {
+              "value": 16384,
+              "label": "16384"
+            },
+            {
+              "value": 32768,
+              "label": "32768"
+            }
+          ]
+        },
+        {
+          "id": "frequencyScale",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.FREQUENCY_SCALE",
+          "value": {
+            "value": "log",
+            "label": "Logarithmic"
+          },
+          "options": [
+            {
+              "value": "log",
+              "label": "Logarithmic"
+            },
+            {
+              "value": "linear",
+              "label": "Linear"
+            },
+            {
+              "value": "bark",
+              "label": "Bark"
+            },
+            {
+              "value": "mel",
+              "label": "Mel"
+            }
+          ]
+        },
+        {
+          "id": "minFreq",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.MIN_FREQ",
+          "doc": "Minimum frequency in Hz",
+          "value": "20"
+        },
+        {
+          "id": "maxFreq",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.MAX_FREQ",
+          "doc": "Maximum frequency in Hz",
+          "value": "22000"
+        },
+        {
+          "id": "minDecibels",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.MIN_DECIBELS",
+          "value": -85
+        },
+        {
+          "id": "maxDecibels",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.MAX_DECIBELS",
+          "value": -25
+        },
+        {
+          "id": "smoothing",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.SMOOTHING",
+          "doc": "Time smoothing (0-1)",
+          "value": "0.7"
+        },
+        {
+          "id": "weightingFilter",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.WEIGHTING_FILTER",
+          "doc": "Frequency weighting filter",
+          "value": {
+            "value": "",
+            "label": "None"
+          },
+          "options": [
+            {
+              "value": "",
+              "label": "None"
+            },
+            {
+              "value": "A",
+              "label": "A-weighting"
+            },
+            {
+              "value": "B",
+              "label": "B-weighting"
+            },
+            {
+              "value": "C",
+              "label": "C-weighting"
+            },
+            {
+              "value": "D",
+              "label": "D-weighting"
+            }
+          ]
+        },
+        {
+          "id": "visual_header",
+          "element": "section",
+          "label": "TRANSLATE.SPECTRUM_WEB.VISUAL_APPEARANCE",
+          "icon": "fa-palette",
+          "description": "Configure visual appearance"
+        },
+        {
+          "id": "colorMode",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.COLOR_MODE",
+          "doc": "gradient: full gradient | bar-index: single color per bar | bar-level: color by amplitude",
+          "value": {
+            "value": "bar-index",
+            "label": "Bar Index"
+          },
+          "options": [
+            {
+              "value": "gradient",
+              "label": "Gradient"
+            },
+            {
+              "value": "bar-level",
+              "label": "Bar Level"
+            },
+            {
+              "value": "bar-index",
+              "label": "Bar Index"
+            }
+          ]
+        },
+        {
+          "id": "gradient",
+          "element": "input",
+          "label": "TRANSLATE.SPECTRUM_WEB.GRADIENT",
+          "doc": "Color gradient name for analyzer graphs",
+          "value": "tiedye"
+        },
+        {
+          "id": "channelLayout",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.CHANNEL_LAYOUT",
+          "doc": "single: combined | dual-combined: overlaid | dual-horizontal/vertical: split",
+          "value": {
+            "value": "single",
+            "label": "Single (Combined)"
+          },
+          "options": [
+            {
+              "value": "single",
+              "label": "Single (Combined)"
+            },
+            {
+              "value": "dual-combined",
+              "label": "Dual Combined"
+            },
+            {
+              "value": "dual-horizontal",
+              "label": "Dual Horizontal"
+            },
+            {
+              "value": "dual-vertical",
+              "label": "Dual Vertical"
+            }
+          ]
+        },
+        {
+          "id": "gravity",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.GRAVITY",
+          "doc": "Bar falling speed",
+          "value": "3.8"
+        },
+        {
+          "id": "barSpace",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.BAR_SPACE",
+          "doc": "Space between bars (0-1)",
+          "value": "0.45"
+        },
+        {
+          "id": "lineWidth",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.LINE_WIDTH",
+          "doc": "Line width in pixels (0 for bars)",
+          "value": "2"
+        },
+        {
+          "id": "peaks_header",
+          "element": "section",
+          "label": "TRANSLATE.SPECTRUM_WEB.PEAK_SETTINGS",
+          "icon": "fa-chart-line",
+          "description": "Configure peak indicators"
+        },
+        {
+          "id": "showPeaks",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_PEAKS",
+          "value": true
+        },
+        {
+          "id": "peakLine",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.PEAK_LINE",
+          "doc": "Show peaks as lines instead of bars",
+          "value": false
+        },
+        {
+          "id": "peakHoldTime",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.PEAK_HOLD_TIME",
+          "doc": "Time in milliseconds",
+          "value": 500
+        },
+        {
+          "id": "peakFadeTime",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.PEAK_FADE_TIME",
+          "doc": "Time in milliseconds",
+          "value": 750
+        },
+        {
+          "id": "effects_header",
+          "element": "section",
+          "label": "TRANSLATE.SPECTRUM_WEB.EFFECTS",
+          "icon": "fa-magic",
+          "description": "Visual effects and transparency"
+        },
+        {
+          "id": "mirror",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.MIRROR",
+          "doc": "Mirror: -1 (low freq center) | 0 (no mirror) | 1 (high freq center)",
+          "value": "0"
+        },
+        {
+          "id": "bgAlpha",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.BG_ALPHA",
+          "doc": "Background transparency (0-1)",
+          "value": 0.7
+        },
+        {
+          "id": "fillAlpha",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.FILL_ALPHA",
+          "doc": "Bar fill transparency (0-1)",
+          "value": "0.05"
+        },
+        {
+          "id": "reflex_header",
+          "element": "section",
+          "label": "TRANSLATE.SPECTRUM_WEB.REFLEX_SETTINGS",
+          "icon": "fa-reflect-horizontal",
+          "description": "Reflection effects"
+        },
+        {
+          "id": "reflexAlpha",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.REFLEX_ALPHA",
+          "doc": "Reflection opacity (0 transparent - 1 opaque)",
+          "value": 0.15
+        },
+        {
+          "id": "reflexBright",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.REFLEX_BRIGHT",
+          "doc": "Reflection brightness (<1 darker, 1 original, >1 brighter)",
+          "value": 1
+        },
+        {
+          "id": "reflexFit",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.REFLEX_FIT",
+          "doc": "Adjust reflection to fit canvas (stretch/shrink)",
+          "value": true
+        },
+        {
+          "id": "reflexRatio",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.REFLEX_RATIO",
+          "doc": "Percentage of canvas height for reflection (0 to <1, 0.5 for perfect mirror)",
+          "value": "0"
+        },
+        {
+          "id": "display_header",
+          "element": "section",
+          "label": "TRANSLATE.SPECTRUM_WEB.DISPLAY_OPTIONS",
+          "icon": "fa-eye",
+          "description": "Display options"
+        },
+        {
+          "id": "showBgColor",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_BG_COLOR",
+          "value": false
+        },
+        {
+          "id": "showScaleX",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_SCALE_X",
+          "value": true
+        },
+        {
+          "id": "showScaleY",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_SCALE_Y",
+          "value": true
+        },
+        {
+          "id": "showFPS",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_FPS",
+          "value": false
+        },
+        {
+          "id": "performance_header",
+          "element": "section",
+          "label": "TRANSLATE.SPECTRUM_WEB.PERFORMANCE",
+          "icon": "fa-tachometer-alt",
+          "description": "Performance settings"
+        },
+        {
+          "id": "maxFPS",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.MAX_FPS",
+          "doc": "Maximum FPS (0 = unlimited)",
+          "value": "60"
+        },
+        {
+          "id": "spinSpeed",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.SPIN_SPEED",
+          "doc": "Radial rotation speed in RPM (+ clockwise, - counter-clockwise, 0 no rotation)",
+          "value": "0"
+        },
+        {
+          "id": "bar_styles_header",
+          "element": "section",
+          "label": "TRANSLATE.SPECTRUM_WEB.BAR_STYLES",
+          "icon": "fa-bars",
+          "description": "Bar appearance styles"
+        },
+        {
+          "id": "roundBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.ROUND_BARS",
+          "doc": "Render bars with rounded corners at the top",
+          "value": false
+        },
+        {
+          "id": "outlineBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.OUTLINE_BARS",
+          "doc": "Render bars outlined with customizable fill alpha and line width",
+          "value": true
+        },
+        {
+          "id": "alphaBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.ALPHA_BARS",
+          "doc": "Bar amplitude affects opacity - higher bars more opaque, shorter bars more transparent",
+          "value": false
+        },
+        {
+          "id": "ledBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.LED_BARS",
+          "doc": "LED bars effect for frequency bands modes",
+          "value": false
+        },
+        {
+          "id": "trueLeds",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.TRUE_LEDS",
+          "doc": "Paint LEDs with individual gradient colors instead of gradient itself",
+          "value": false
+        },
+        {
+          "id": "lumiBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.LUMI_BARS",
+          "doc": "All bars at full height with varying luminance (opacity)",
+          "value": true
+        },
+        {
+          "id": "amplitude_header",
+          "element": "section",
+          "label": "TRANSLATE.SPECTRUM_WEB.AMPLITUDE",
+          "icon": "fa-volume-up",
+          "description": "Amplitude settings"
+        },
+        {
+          "id": "linearAmplitude",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.LINEAR_AMPLITUDE",
+          "doc": "Use linear scale for amplitude instead of decibels (logarithmic)",
+          "value": "1"
+        },
+        {
+          "id": "linearBoost",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.LINEAR_BOOST",
+          "doc": "Nth-root amplification for low energy when using linear amplitude (>=1)",
+          "value": 1
+        },
+        {
+          "id": "gradientRight",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.GRADIENT_RIGHT",
+          "value": {
+            "value": "prism",
+            "label": "Prism"
+          },
+          "options": [
+            {
+              "value": "classic",
+              "label": "Classic"
+            },
+            {
+              "value": "prism",
+              "label": "Prism"
+            },
+            {
+              "value": "rainbow",
+              "label": "Rainbow"
+            },
+            {
+              "value": "orangered",
+              "label": "Orange Red"
+            },
+            {
+              "value": "steelblue",
+              "label": "Steel Blue"
+            }
+          ]
+        },
+        {
+          "id": "presetSelect",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.PRESET_SELECT",
+          "value": {
+            "value": "",
+            "label": ""
+          },
+          "options": []
+        },
+        {
+          "id": "bgType",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.BG_TYPE",
+          "value": {
+            "value": "none",
+            "label": "None"
+          },
+          "options": [
+            {
+              "value": "none",
+              "label": "None"
+            },
+            {
+              "value": "image",
+              "label": "Image"
+            },
+            {
+              "value": "color",
+              "label": "Color"
+            }
+          ]
+        },
+        {
+          "id": "bgFile",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.BG_FILE",
+          "doc": "Path or URL to background file",
+          "value": ""
+        },
+        {
+          "id": "bgFit",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.BG_FIT",
+          "value": {
+            "value": "cover",
+            "label": "Cover"
+          },
+          "options": [
+            {
+              "value": "cover",
+              "label": "Cover"
+            },
+            {
+              "value": "contain",
+              "label": "Contain"
+            },
+            {
+              "value": "stretch",
+              "label": "Stretch"
+            }
+          ]
+        },
+        {
+          "id": "sensitivity",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.SENSITIVITY",
+          "doc": "Amplitude sensitivity",
+          "value": "1"
+        },
+        {
+          "id": "reflex",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.REFLEX",
+          "doc": "Reflection intensity",
+          "value": "0"
+        },
+        {
+          "id": "scaleX",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SCALE_X",
+          "value": "1"
+        },
+        {
+          "id": "scaleY",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SCALE_Y",
+          "value": "0"
+        },
+        {
+          "id": "freqScale",
+          "element": "select",
+          "label": "TRANSLATE.SPECTRUM_WEB.FREQ_SCALE",
+          "value": {
+            "value": "log",
+            "label": "Logarithmic"
+          },
+          "options": [
+            {
+              "value": "log",
+              "label": "Logarithmic"
+            },
+            {
+              "value": "linear",
+              "label": "Linear"
+            },
+            {
+              "value": "bark",
+              "label": "Bark"
+            },
+            {
+              "value": "mel",
+              "label": "Mel"
+            }
+          ]
+        },
+        {
+          "id": "radius",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.RADIUS",
+          "doc": "Internal radius of radial spectrum (0-1)",
+          "value": "0.3"
+        },
+        {
+          "id": "ansiBands",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.ANSI_BANDS",
+          "doc": "Use ANSI/IEC preferred frequencies (true) or equal-tempered scale (false)",
+          "value": "0"
+        },
+        {
+          "id": "peakFade",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.PEAK_FADE",
+          "doc": "Peak fade time in ms",
+          "value": "750"
+        },
+        {
+          "id": "peakHold",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.PEAK_HOLD",
+          "doc": "Peak hold time in ms",
+          "value": "500"
+        },
+        {
+          "id": "fsHeight",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.FS_HEIGHT",
+          "doc": "Fullscreen height (%)",
+          "value": "100"
+        },
+        {
+          "id": "autoHide",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.AUTO_HIDE",
+          "value": false
+        },
+        {
+          "id": "bgDim",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.BG_DIM",
+          "doc": "Background dim (0-1)",
+          "value": "0.5"
+        },
+        {
+          "id": "showControlBar",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_CONTROL_BAR",
+          "value": true
+        },
+        {
+          "id": "showNowPlaying",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_NOW_PLAYING",
+          "value": true
+        },
+        {
+          "id": "npX",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.NP_X",
+          "doc": "Now Playing X position in pixels",
+          "value": "16"
+        },
+        {
+          "id": "npY",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.NP_Y",
+          "doc": "Now Playing Y position in pixels",
+          "value": "16"
+        },
+        {
+          "id": "npW",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.NP_W",
+          "doc": "Now Playing width in pixels",
+          "value": "600"
+        },
+        {
+          "id": "npH",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.NP_H",
+          "doc": "Now Playing height (auto or pixels)",
+          "value": "auto"
+        },
+        {
+          "id": "volume",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.VOLUME",
+          "doc": "Output volume (0 mutes, 1 keeps same input, >1 amplifies)",
+          "value": "0"
+        },
+        {
+          "id": "wsUrl",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.WS_URL",
+          "value": "ws://192.168.1.63:9001"
+        },
+        {
+          "id": "volumioUrl",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.VOLUMIO_URL",
+          "value": "http://192.168.1.63:3000"
+        },
+        {
+          "id": "importFile",
+          "element": "input",
+          "type": "text",
+          "label": "TRANSLATE.SPECTRUM_WEB.IMPORT_FILE",
+          "doc": "Import preset file path",
+          "value": ""
+        },
+        {
+          "id": "linkGrads",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.LINK_GRADS",
+          "value": false
+        },
+        {
+          "id": "splitGrad",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SPLIT_GRAD",
+          "doc": "Split gradient between channels in dual-vertical mode",
+          "value": false
+        },
+        {
+          "id": "randomMode",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_MODE",
+          "doc": "Randomize visualization mode",
+          "value": true
+        },
+        {
+          "id": "randomGradient",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_GRADIENT",
+          "doc": "Randomize gradient selection",
+          "value": true
+        },
+        {
+          "id": "randomGradientRight",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_GRADIENT_RIGHT",
+          "doc": "Randomize right channel gradient (dual layouts)",
+          "value": true
+        },
+        {
+          "id": "randomColorMode",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_COLOR_MODE",
+          "doc": "Randomize color mode (gradient/bar-index/bar-level)",
+          "value": true
+        },
+        {
+          "id": "randomBarSpace",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_BAR_SPACE",
+          "doc": "Randomize spacing between bars",
+          "value": true
+        },
+        {
+          "id": "randomFillAlpha",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_FILL_ALPHA",
+          "doc": "Randomize fill transparency",
+          "value": true
+        },
+        {
+          "id": "randomLineWidth",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_LINE_WIDTH",
+          "doc": "Randomize line width for graph/outline modes",
+          "value": true
+        },
+        {
+          "id": "randomSensitivity",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_SENSITIVITY",
+          "doc": "Randomize amplitude sensitivity",
+          "value": true
+        },
+        {
+          "id": "randomMirror",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_MIRROR",
+          "doc": "Randomize mirror effect",
+          "value": true
+        },
+        {
+          "id": "randomAlphaBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_ALPHA_BARS",
+          "doc": "Randomize alpha bars effect",
+          "value": true
+        },
+        {
+          "id": "randomLumiBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_LUMI_BARS",
+          "doc": "Randomize luminance bars effect",
+          "value": true
+        },
+        {
+          "id": "randomLedBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_LED_BARS",
+          "doc": "Randomize LED bars effect",
+          "value": true
+        },
+        {
+          "id": "randomOutlineBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_OUTLINE_BARS",
+          "doc": "Randomize outline bars effect",
+          "value": true
+        },
+        {
+          "id": "randomRadial",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_RADIAL",
+          "doc": "Randomize radial spectrum mode",
+          "value": true
+        },
+        {
+          "id": "randomRoundBars",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_ROUND_BARS",
+          "doc": "Randomize rounded bars effect",
+          "value": true
+        },
+        {
+          "id": "randomBgType",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_BG_TYPE",
+          "doc": "Randomize background type",
+          "value": true
+        },
+        {
+          "id": "randomBgFile",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_BG_FILE",
+          "doc": "Randomize background file selection",
+          "value": true
+        },
+        {
+          "id": "randomBgFit",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_BG_FIT",
+          "doc": "Randomize background fit mode",
+          "value": true
+        },
+        {
+          "id": "randomOnTrackChange",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_ON_TRACK_CHANGE",
+          "doc": "Apply randomization when track changes",
+          "value": true
+        },
+        {
+          "id": "randomOnInterval",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_ON_INTERVAL",
+          "doc": "Apply randomization on time interval",
+          "value": true
+        },
+        {
+          "id": "randomInterval",
+          "element": "input",
+          "type": "number",
+          "label": "TRANSLATE.SPECTRUM_WEB.RANDOM_INTERVAL",
+          "doc": "Randomization interval in seconds",
+          "value": "30"
+        },
+        {
+          "id": "radial",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.RADIAL",
+          "doc": "Circular spectrum with radial frequency bars from center",
+          "value": false
+        },
+        {
+          "id": "showSong",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_SONG",
+          "doc": "Display current song information",
+          "value": true
+        },
+        {
+          "id": "showFPS",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_FPS",
+          "doc": "Display current frame rate",
+          "value": false
+        },
+        {
+          "id": "loRes",
+          "element": "switch",
+          "label": "TRANSLATE.SPECTRUM_WEB.LO_RES",
+          "doc": "Low resolution mode - halves pixel ratio for better performance",
+          "value": false
+        }
+      ]
+    }
+  ]
+}
