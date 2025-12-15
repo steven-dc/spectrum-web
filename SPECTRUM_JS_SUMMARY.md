@@ -37,7 +37,7 @@ Class xử lý audio PCM stream:
 #### Quản lý cấu hình
 - **initializeUI()**: Khởi tạo dropdown gradients và presets
 - **setupEventListeners()**: Thiết lập event listeners cho tất cả controls:
-  - Mode selection (10 modes khác nhau)
+  - Mode selection (10 modes: Discrete frequencies, 1/12th octave, 1/8th octave, 1/6th octave, 1/4th octave, 1/3rd octave, Half octave, Full octave, Line graph, Graph)
   - Gradient và color mode
   - Sensitivity (3 mức: normal, medium, high)
   - Effects (alphaBars, lumiBars, ledBars, outlineBars, radial, roundBars)
@@ -160,7 +160,7 @@ Event listener cho DOMContentLoaded:
 ## Các tính năng chính
 
 ### Spectrum Visualization
-- Hỗ trợ 10+ visualization modes
+- Hỗ trợ 10 visualization modes (từ discrete frequencies đến graph)
 - 17 gradient colors có sẵn
 - Nhiều effects: LED bars, outline bars, radial, round bars
 - Reflex (phản chiếu)
