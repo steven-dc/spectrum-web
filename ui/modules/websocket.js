@@ -27,7 +27,7 @@ export function connectWebSocket() {
         state.ws.binaryType = 'arraybuffer';
 
         // Clear any existing timeout
-        if (state.state.wsConnectTimeout) {
+        if (state.wsConnectTimeout) {
             clearTimeout(state.wsConnectTimeout);
             state.wsConnectTimeout = null;
         }
@@ -42,7 +42,7 @@ export function connectWebSocket() {
         }, 8000);
 
         state.ws.onopen = () => {
-            if (state.state.wsConnectTimeout) {
+            if (state.wsConnectTimeout) {
                 clearTimeout(state.wsConnectTimeout);
                 state.wsConnectTimeout = null;
             }
@@ -92,7 +92,7 @@ export function connectWebSocket() {
         };
 
         state.ws.onerror = (err) => {
-            if (state.state.wsConnectTimeout) {
+            if (state.wsConnectTimeout) {
                 clearTimeout(state.wsConnectTimeout);
                 state.wsConnectTimeout = null;
             }
@@ -101,7 +101,7 @@ export function connectWebSocket() {
         };
 
         state.ws.onclose = () => {
-            if (state.state.wsConnectTimeout) {
+            if (state.wsConnectTimeout) {
                 clearTimeout(state.wsConnectTimeout);
                 state.wsConnectTimeout = null;
             }
@@ -114,7 +114,7 @@ export function connectWebSocket() {
         };
 
     } catch (e) {
-        if (state.state.wsConnectTimeout) {
+        if (state.wsConnectTimeout) {
             clearTimeout(state.wsConnectTimeout);
             state.wsConnectTimeout = null;
         }

@@ -137,8 +137,8 @@ export function setupEventListeners() {
             gradientRight.disabled = !active;
             if (!active && audioMotion) {
                 const mainGrad = document.getElementById('gradient').value;
-                audioMotion.gradient = mainGrad;
-                audioMotion.gradientRight = mainGrad;
+                state.audioMotion.gradient = mainGrad;
+                state.audioMotion.gradientRight = mainGrad;
                 gradientRight.value = mainGrad;
             }
         }
@@ -175,9 +175,9 @@ export function setupEventListeners() {
 
             if (audioMotion && sensitivityPresets[preset]) {
                 const { min, max, boost } = sensitivityPresets[preset];
-                audioMotion.minDecibels = min;
-                audioMotion.maxDecibels = max;
-                audioMotion.linearBoost = boost;
+                state.audioMotion.minDecibels = min;
+                state.audioMotion.maxDecibels = max;
+                state.audioMotion.linearBoost = boost;
                 console.log('[Settings] Sensitivity:', preset);
             }
         });
@@ -212,15 +212,15 @@ export function setupEventListeners() {
                         audioMotion.reflexAlpha = 0.2;
                         break;
                     case '1':
-                        audioMotion.reflexRatio = 0.4;
-                        audioMotion.reflexAlpha = 0.2;
+                        state.audioMotion.reflexRatio = 0.4;
+                        state.audioMotion.reflexAlpha = 0.2;
                         break;
                     case '2':
-                        audioMotion.reflexRatio = 0.5;
-                        audioMotion.reflexAlpha = 1;
+                        state.audioMotion.reflexRatio = 0.5;
+                        state.audioMotion.reflexAlpha = 1;
                         break;
                     default:
-                        audioMotion.reflexRatio = 0;
+                        state.audioMotion.reflexRatio = 0;
                 }
             }
         });

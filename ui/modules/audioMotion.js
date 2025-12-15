@@ -160,7 +160,7 @@ export function applyServerSettings(settings) {
         // Apply each setting
         for (let key in settings) {
             if (settings.hasOwnProperty(key) && state.audioMotion.hasOwnProperty(key)) {
-                audioMotion[key] = settings[key];
+                state.audioMotion[key] = settings[key];
                 console.log('[AM] Updated:', key, '=', settings[key]);
             }
         }

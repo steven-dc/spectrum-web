@@ -43,7 +43,7 @@ export function updateProgressBar() {
         });
 }
 
-async export function fetchVolumioState(progressOnly = false) {
+export async function fetchVolumioState(progressOnly = false) {
     try {
         const response = await fetch(`${getVolumioUrl()}/api/v1/getState`);
         if (!response.ok) throw new Error('Failed to fetch state');
@@ -145,9 +145,6 @@ export function updateNowPlaying(state) {
 // ===========================
 // QUEUE MANAGEMENT
 // ===========================
-let state.browsePanelVisible = false;
-let state.browseHistory = [];
-let state.currentBrowsePath = null;
 
 export function openVolumioMusic() {
     toggleBrowse();
@@ -175,7 +172,7 @@ export function toggleBrowse() {
     }
 }
 
-async export function browseMusicLibrary(uri = null) {
+export async function browseMusicLibrary(uri = null) {
     try {
         const volumioUrl = getVolumioUrl();
         let url = `${volumioUrl}/api/v1/browse`;
@@ -312,7 +309,7 @@ export function handleBrowseItemClick(item) {
     }
 }
 
-async export function playBrowseItem(item) {
+export async function playBrowseItem(item) {
     try {
         const volumioUrl = getVolumioUrl();
         
@@ -380,7 +377,7 @@ export function showBrowseMenu(event, itemIndex) {
     }, 0);
 }
 
-async export function addBrowseItemToQueue(item, position = 'end') {
+export async function addBrowseItemToQueue(item, position = 'end') {
     try {
         const volumioUrl = getVolumioUrl();
         const response = await fetch(`${volumioUrl}/api/v1/addToQueue`, {
@@ -403,7 +400,7 @@ async export function addBrowseItemToQueue(item, position = 'end') {
     }
 }
 
-async export function addBrowseItemToPlaylist(item) {
+export async function addBrowseItemToPlaylist(item) {
     const playlistName = prompt('Enter playlist name:');
     if (!playlistName) return;
 
@@ -442,7 +439,7 @@ export function toggleQueue() {
     }
 }
 
-async export function fetchQueue() {
+export async function fetchQueue() {
     try {
         const volumioUrl = getVolumioUrl();
         console.log('[Queue] Fetching from:', `${volumioUrl}/api/v1/getQueue`);
@@ -465,7 +462,7 @@ async export function fetchQueue() {
     }
 }
 
-async export function displayQueue(queue) {
+export async function displayQueue(queue) {
     const queueList = document.getElementById('queueList');
     if (!queueList) return;
 
@@ -530,7 +527,7 @@ async export function displayQueue(queue) {
     });
 }
 
-async export function playQueueItem(position) {
+export async function playQueueItem(position) {
     try {
         const volumioUrl = getVolumioUrl();
         // Volumio API: play specific queue index
@@ -551,7 +548,7 @@ async export function playQueueItem(position) {
     }
 }
 
-async export function volumioTogglePlay() {
+export async function volumioTogglePlay() {
     try {
         const response = await fetch(`${getVolumioUrl()}/api/v1/commands/?cmd=toggle`);
         if (response.ok) {
@@ -563,7 +560,7 @@ async export function volumioTogglePlay() {
     }
 }
 
-async export function volumioPrevious() {
+export async function volumioPrevious() {
     try {
         const response = await fetch(`${getVolumioUrl()}/api/v1/commands/?cmd=prev`);
         if (response.ok) {
@@ -575,7 +572,7 @@ async export function volumioPrevious() {
     }
 }
 
-async export function volumioNext() {
+export async function volumioNext() {
     try {
         const response = await fetch(`${getVolumioUrl()}/api/v1/commands/?cmd=next`);
         if (response.ok) {
@@ -587,7 +584,7 @@ async export function volumioNext() {
     }
 }
 
-async export function testVolumioConnection() {
+export async function testVolumioConnection() {
     try {
         const response = await fetch(`${getVolumioUrl()}/api/v1/getState`);
         if (response.ok) {
