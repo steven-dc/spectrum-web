@@ -1131,17 +1131,18 @@ function updateBackgroundControls() {
     const bgType = document.getElementById("bgType");
     if (!bgType) return;
 
-    const imageLabel = document.getElementById("bgImageLabel");
-    const imageSelect = document.getElementById("bgImage");
+    const fileLabel = document.getElementById("bgFileLabel");
+    const fileSelect = document.getElementById("bgFile");
 
     // hide everything first
-    if (imageLabel) imageLabel.style.display = "none";
-    if (imageSelect) imageSelect.style.display = "none";
+    if (fileLabel) fileLabel.style.display = "none";
+    if (fileSelect) fileSelect.style.display = "none";
 
-    // New behavior: "Background Image" is used for both images and videos (Select Media)
-    if (bgType.value === "image") {
-        if (imageLabel) imageLabel.style.display = "block";
-        if (imageSelect) imageSelect.style.display = "block";
+    // New behavior: "Background File" is used for both images and videos (Select Media)
+    // Align with applyBackground() which expects value "file"
+    if (bgType.value === "file") {
+        if (fileLabel) fileLabel.style.display = "block";
+        if (fileSelect) fileSelect.style.display = "block";
     }
 }
 
@@ -2372,10 +2373,19 @@ async function initAudioMotion() {
         if (serverSettings) {
             console.log('[AM] Syncing UI elements with server settings...');
             // Use a small delay to ensure UI is ready
-            setTimeout(() => syncUIWithSettings(serverSettings), 100);
+            setTimeout(() => {
+                syncUIWithSettings(serverSettings);
+                // Ensure background is applied based on synced UI
+                updateBackgroundControls();
+                applyBackground();
+            }, 100);
         }
 
-        refreshBackgroundFiles();
+        // Load available background files and apply current background selection
+        refreshBackgroundFiles().then(() => {
+            updateBackgroundControls();
+            applyBackground();
+        });
         connectWebSocket();
         setInterval(updateFPS, 1000);
 
@@ -2609,6 +2619,8 @@ function syncUIWithSettings(settings) {
         // Frequency Scale
         if (settings.frequencyScale) {
             setRadioValue('freqScaleSelect', settings.frequencyScale);
+        } else if (settings.freqScale) {
+            setRadioValue('freqScaleSelect', settings.freqScale);
         }
 
         // Frequency Range
@@ -2787,6 +2799,44 @@ function syncUIWithSettings(settings) {
         // }
 
         console.log('[AM] ✓ UI elements synced with server settings');
+
+        // Apply Background-related settings if present
+        const bgTypeSel = document.getElementById('bgType');
+        if (bgTypeSel && settings.bgType) {
+            bgTypeSel.value = settings.bgType;
+        }
+
+        // Populate background files may be async; set value if option exists
+        const bgFileSel = document.getElementById('bgFile');
+        if (bgFileSel && settings.bgFile) {
+            // Try to select matching option by text or value
+            const target = settings.bgFile;
+            // Prefer exact value match
+            const opt = Array.from(bgFileSel.options).find(o => o.value === target || o.text === target);
+            if (opt) bgFileSel.value = opt.value;
+        }
+
+        const bgFitSel = document.getElementById('bgFit');
+        if (bgFitSel && settings.bgFit) {
+            bgFitSel.value = settings.bgFit;
+            updateBackgroundFit(settings.bgFit);
+        }
+
+        const bgDimInput = document.getElementById('bgDim');
+        if (bgDimInput && settings.bgDim !== undefined) {
+            bgDimInput.value = parseFloat(settings.bgDim);
+            updateBackgroundDim(parseFloat(settings.bgDim));
+        }
+
+        // Apply URLs if provided
+        const wsUrlInput = document.getElementById('wsUrl');
+        if (wsUrlInput && settings.wsUrl) wsUrlInput.value = settings.wsUrl;
+        const volumioUrlInput = document.getElementById('volumioUrl');
+        if (volumioUrlInput && settings.volumioUrl) volumioUrlInput.value = settings.volumioUrl;
+
+        // Finally ensure background gets applied according to synced settings
+        updateBackgroundControls();
+        applyBackground();
     } catch (error) {
         console.error('[AM] Error syncing UI:', error);
     }
@@ -2853,3 +2903,425 @@ window.addEventListener("beforeunload", () => {
     if (progressInterval) clearInterval(progressInterval);
     if (sharedAudioContext) sharedAudioContext.close();
 });
+
+// ===========================
+// RANDOM SETTINGS LOGIC
+// ===========================
+(function () {
+    let randomIntervalTimer = null;
+    let lastRandomTime = null;
+    let nextRandomTime = null;
+
+    // Randomize now
+    window.randomizeNow = function () {
+        const options = {
+            mode: document.getElementById('randomMode')?.checked,
+            gradient: document.getElementById('randomGradient')?.checked,
+            gradientRight: document.getElementById('randomGradientRight')?.checked,
+            colorMode: document.getElementById('randomColorMode')?.checked,
+            barSpace: document.getElementById('randomBarSpace')?.checked,
+            fillAlpha: document.getElementById('randomFillAlpha')?.checked,
+            lineWidth: document.getElementById('randomLineWidth')?.checked,
+            sensitivity: document.getElementById('randomSensitivity')?.checked,
+            mirror: document.getElementById('randomMirror')?.checked,
+            alphaBars: document.getElementById('randomAlphaBars')?.checked,
+            lumiBars: document.getElementById('randomLumiBars')?.checked,
+            ledBars: document.getElementById('randomLedBars')?.checked,
+            outlineBars: document.getElementById('randomOutlineBars')?.checked,
+            radial: document.getElementById('randomRadial')?.checked,
+            roundBars: document.getElementById('randomRoundBars')?.checked,
+            bgType: document.getElementById('randomBgType')?.checked,
+            bgFile: document.getElementById('randomBgFile')?.checked,
+            bgFit: document.getElementById('randomBgFit')?.checked
+        };
+
+        applyRandomization(options);
+        updateRandomStatus();
+    };
+
+    function applyRandomization(options) {
+        // Mode
+        if (options.mode) {
+            const modeSelect = document.getElementById('mode');
+            const modeOptions = Array.from(modeSelect.options);
+            const randomMode = modeOptions[Math.floor(Math.random() * modeOptions.length)];
+            modeSelect.value = randomMode.value;
+            modeSelect.dispatchEvent(new Event('change'));
+        }
+
+        // Gradient
+        if (options.gradient) {
+            const gradSelect = document.getElementById('gradient');
+            const gradOptions = Array.from(gradSelect.options);
+            const randomGrad = gradOptions[Math.floor(Math.random() * gradOptions.length)];
+            gradSelect.value = randomGrad.value;
+            gradSelect.dispatchEvent(new Event('change'));
+        }
+
+        // Gradient Right
+        if (options.gradientRight) {
+            const gradRightSelect = document.getElementById('gradientRight');
+            const gradRightOptions = Array.from(gradRightSelect.options);
+            const randomGradRight = gradRightOptions[Math.floor(Math.random() * gradRightOptions.length)];
+            gradRightSelect.value = randomGradRight.value;
+            gradRightSelect.dispatchEvent(new Event('change'));
+        }
+
+        // Color Mode
+        if (options.colorMode) {
+            const colorModes = ['gradient', 'bar-index', 'bar-level'];
+            const randomColorMode = colorModes[Math.floor(Math.random() * colorModes.length)];
+            document.getElementById(`color-${randomColorMode}`)?.click();
+        }
+
+        // Bar Space (0 to 1)
+        if (options.barSpace) {
+            const barSpaceSlider = document.getElementById('barSpace');
+            barSpaceSlider.value = (Math.random()).toFixed(2);
+            barSpaceSlider.dispatchEvent(new Event('input'));
+        }
+
+        // Fill Alpha (0 to 1)
+        if (options.fillAlpha) {
+            const fillAlphaSlider = document.getElementById('fillAlpha');
+            fillAlphaSlider.value = (Math.random()).toFixed(2);
+            fillAlphaSlider.dispatchEvent(new Event('input'));
+        }
+
+        // Line Width (0 to 3)
+        if (options.lineWidth) {
+            const lineWidthSlider = document.getElementById('lineWidth');
+            const randomWidth = (Math.random() * 3).toFixed(1);
+            lineWidthSlider.value = randomWidth;
+            lineWidthSlider.dispatchEvent(new Event('input'));
+        }
+
+        // Sensitivity
+        if (options.sensitivity) {
+            const sensLevels = ['0', '1', '2'];
+            const randomSens = sensLevels[Math.floor(Math.random() * sensLevels.length)];
+            document.getElementById(`sens-${randomSens === '0' ? 'low' : randomSens === '1' ? 'med' : 'high'}`)?.click();
+        }
+
+        // Mirror
+        if (options.mirror) {
+            const mirrorValues = ['-1', '0', '1'];
+            const randomMirror = mirrorValues[Math.floor(Math.random() * mirrorValues.length)];
+            document.getElementById(`mirror-${randomMirror === '-1' ? 'left' : randomMirror === '0' ? 'off' : 'right'}`)?.click();
+        }
+
+        // Toggle switches
+        const toggles = [
+            { option: 'alphaBars', id: 'alphaBars' },
+            { option: 'lumiBars', id: 'lumiBars' },
+            { option: 'ledBars', id: 'ledBars' },
+            { option: 'outlineBars', id: 'outlineBars' },
+            { option: 'radial', id: 'radial' },
+            { option: 'roundBars', id: 'roundBars' }
+        ];
+
+        toggles.forEach(toggle => {
+            if (options[toggle.option]) {
+                const element = document.getElementById(toggle.id);
+                const randomState = Math.random() > 0.5;
+                element.setAttribute('data-active', randomState ? '1' : '0');
+                element.dispatchEvent(new Event('click'));
+            }
+        });
+
+        // Background Type
+        if (options.bgType) {
+            const bgTypeSelect = document.getElementById('bgType');
+            const bgTypeOptions = Array.from(bgTypeSelect.options);
+            const randomBgType = bgTypeOptions[Math.floor(Math.random() * bgTypeOptions.length)];
+            bgTypeSelect.value = randomBgType.value;
+            bgTypeSelect.dispatchEvent(new Event('change'));
+        }
+
+        // Background File
+        if (options.bgFile) {
+            const bgFileSelect = document.getElementById('bgFile');
+            const bgFileOptions = Array.from(bgFileSelect.options).filter(opt => opt.value !== '');
+            if (bgFileOptions.length > 0) {
+                const randomBgFile = bgFileOptions[Math.floor(Math.random() * bgFileOptions.length)];
+                bgFileSelect.value = randomBgFile.value;
+                bgFileSelect.dispatchEvent(new Event('change'));
+            }
+        }
+
+        // Background Fit
+        if (options.bgFit) {
+            const bgFitSelect = document.getElementById('bgFit');
+            const bgFitOptions = Array.from(bgFitSelect.options);
+            const randomBgFit = bgFitOptions[Math.floor(Math.random() * bgFitOptions.length)];
+            bgFitSelect.value = randomBgFit.value;
+            bgFitSelect.dispatchEvent(new Event('change'));
+        }
+
+        lastRandomTime = new Date();
+    }
+
+    function updateRandomStatus() {
+        const lastTimeEl = document.getElementById('randomLastTime');
+        const nextTimeEl = document.getElementById('randomNextTime');
+
+        if (lastRandomTime) {
+            lastTimeEl.textContent = lastRandomTime.toLocaleTimeString();
+        }
+
+        if (nextRandomTime) {
+            nextTimeEl.textContent = nextRandomTime.toLocaleTimeString();
+        } else {
+            nextTimeEl.textContent = '-';
+        }
+    }
+
+    function startRandomInterval() {
+        stopRandomInterval();
+
+        const intervalCheckbox = document.getElementById('randomOnInterval');
+        const intervalInput = document.getElementById('randomInterval');
+
+        if (intervalCheckbox?.checked) {
+            const seconds = parseInt(intervalInput.value || '30');
+            nextRandomTime = new Date(Date.now() + seconds * 1000);
+            updateRandomStatus();
+
+            randomIntervalTimer = setInterval(() => {
+                randomizeNow();
+                nextRandomTime = new Date(Date.now() + seconds * 1000);
+                updateRandomStatus();
+            }, seconds * 1000);
+        }
+    }
+
+    function stopRandomInterval() {
+        if (randomIntervalTimer) {
+            clearInterval(randomIntervalTimer);
+            randomIntervalTimer = null;
+            nextRandomTime = null;
+            updateRandomStatus();
+        }
+    }
+
+    // Select/Deselect all
+    window.selectAllRandom = function () {
+        document.querySelectorAll('#random-tab input[type="checkbox"]').forEach(cb => {
+            if (!cb.id.startsWith('randomOn')) {
+                cb.checked = true;
+            }
+        });
+    };
+
+    window.deselectAllRandom = function () {
+        document.querySelectorAll('#random-tab input[type="checkbox"]').forEach(cb => {
+            if (!cb.id.startsWith('randomOn')) {
+                cb.checked = false;
+            }
+        });
+    };
+
+    // Setup event listeners
+    document.getElementById('randomOnInterval')?.addEventListener('change', function () {
+        if (this.checked) {
+            startRandomInterval();
+        } else {
+            stopRandomInterval();
+        }
+    });
+
+    document.getElementById('randomInterval')?.addEventListener('change', function () {
+        if (document.getElementById('randomOnInterval')?.checked) {
+            startRandomInterval();
+        }
+    });
+
+    // Hook into track change (you'll need to call this from your main spectrum.js)
+    window.onTrackChange = function () {
+        if (document.getElementById('randomOnTrackChange')?.checked) {
+            randomizeNow();
+        }
+    };
+
+    // Update status every second
+    setInterval(updateRandomStatus, 1000);
+})();
+
+// ===========================
+// NOW PLAYING DRAG & VISIBILITY MANAGEMENT
+// ===========================
+(function () {
+    const box = document.getElementById("nowPlaying");
+    if (!box) return;
+
+    // Drag functionality
+    let dragging = false;
+    let pos = { x: 0, y: 0 };
+    let mouse = { x: 0, y: 0 };
+
+    function onMouseDown(e) {
+        if (e.target.closest(".control-btn") || e.target.classList.contains('resize-handle')) return;
+        dragging = true;
+        box.classList.add("dragging");
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+        const rect = box.getBoundingClientRect();
+        pos.x = rect.left;
+        pos.y = rect.top;
+        e.preventDefault();
+    }
+
+    function onMouseMove(e) {
+        if (!dragging) return;
+        const dx = e.clientX - mouse.x;
+        const dy = e.clientY - mouse.y;
+        box.style.left = pos.x + dx + "px";
+        box.style.top = pos.y + dy + "px";
+        box.style.right = "auto";
+        box.style.bottom = "auto";
+        // update inputs
+        const npX = document.getElementById('npX');
+        const npY = document.getElementById('npY');
+        if (npX) npX.value = Math.round(pos.x + dx);
+        if (npY) npY.value = Math.round(pos.y + dy);
+    }
+
+    function onMouseUp() {
+        if (!dragging) return;
+        dragging = false;
+        box.classList.remove("dragging");
+    }
+
+    box.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+
+    // Visibility control: respect showNowPlaying checkbox
+    const showCheckbox = document.getElementById('showNowPlaying');
+    if (showCheckbox) {
+        showCheckbox.addEventListener('change', () => {
+            if (showCheckbox.checked) {
+                box.classList.remove('hidden-by-css');
+            } else {
+                box.classList.add('hidden-by-css');
+            }
+        });
+    }
+
+    // Resize functionality
+    let resizing = false;
+    let resizeStart = { x: 0, y: 0, w: 0, h: 0, left: 0, top: 0 };
+    let resizeMode = null; // tl, tr, bl, br
+
+    function onResizeDown(e) {
+        const handle = e.target;
+        if (!handle.classList.contains('resize-handle')) return;
+        resizing = true;
+        resizeMode = handle.classList.contains('resize-tl') ? 'tl'
+            : handle.classList.contains('resize-tr') ? 'tr'
+                : handle.classList.contains('resize-bl') ? 'bl' : 'br';
+        const rect = box.getBoundingClientRect();
+        resizeStart = { x: e.clientX, y: e.clientY, w: rect.width, h: rect.height, left: rect.left, top: rect.top };
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function onResizeMove(e) {
+        if (!resizing) return;
+        const dx = e.clientX - resizeStart.x;
+        const dy = e.clientY - resizeStart.y;
+        let newW = resizeStart.w;
+        let newH = resizeStart.h;
+        let newLeft = resizeStart.left;
+        let newTop = resizeStart.top;
+
+        if (resizeMode === 'br') { newW += dx; newH += dy; }
+        else if (resizeMode === 'bl') { newW -= dx; newH += dy; newLeft += dx; }
+        else if (resizeMode === 'tr') { newW += dx; newH -= dy; newTop += dy; }
+        else if (resizeMode === 'tl') { newW -= dx; newH -= dy; newLeft += dx; newTop += dy; }
+
+        // constraints
+        newW = Math.max(320, Math.min(newW, window.innerWidth - 32));
+        newH = Math.max(100, Math.min(newH, window.innerHeight - 32));
+        newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - newW));
+        newTop = Math.max(0, Math.min(newTop, window.innerHeight - newH));
+
+        box.style.width = newW + 'px';
+        box.style.height = newH + 'px';
+        box.style.left = newLeft + 'px';
+        box.style.top = newTop + 'px';
+        box.style.right = 'auto';
+        box.style.bottom = 'auto';
+
+        const npX = document.getElementById('npX');
+        const npY = document.getElementById('npY');
+        const npW = document.getElementById('npW');
+        const npH = document.getElementById('npH');
+        if (npX) npX.value = Math.round(newLeft);
+        if (npY) npY.value = Math.round(newTop);
+        if (npW) npW.value = Math.round(newW);
+        if (npH) npH.value = Math.round(newH);
+    }
+
+    function onResizeUp() {
+        if (!resizing) return;
+        resizing = false;
+    }
+
+    box.addEventListener('mousedown', onResizeDown);
+    document.addEventListener('mousemove', onResizeMove);
+    document.addEventListener('mouseup', onResizeUp);
+
+    // Apply/reset from settings inputs
+    const applyBtn = document.getElementById('applyNowPlayingLayoutBtn');
+    const resetBtn = document.getElementById('resetNowPlayingLayoutBtn');
+    function applyFromInputs() {
+        const npX = document.getElementById('npX');
+        const npY = document.getElementById('npY');
+        const npW = document.getElementById('npW');
+        const npH = document.getElementById('npH');
+        if (!npX || !npY || !npW || !npH) return;
+        const x = parseInt(npX.value || '16');
+        const y = parseInt(npY.value || '16');
+        const w = parseInt(npW.value || '600');
+        const hVal = npH.value;
+        box.style.left = x + 'px';
+        box.style.top = y + 'px';
+        box.style.width = w + 'px';
+        if (hVal && hVal !== 'auto') {
+            const h = parseInt(hVal);
+            box.style.height = h + 'px';
+        } else {
+            box.style.height = '';
+        }
+        box.style.right = 'auto';
+        box.style.bottom = 'auto';
+    }
+    if (applyBtn) applyBtn.addEventListener('click', applyFromInputs);
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+        document.getElementById('npX').value = 16;
+        document.getElementById('npY').value = 16;
+        document.getElementById('npW').value = 600;
+        document.getElementById('npH').value = 'auto';
+        applyFromInputs();
+    });
+})();
+
+
+// ===========================
+// BACKGROUND FILE VISIBILITY TOGGLE
+// ===========================
+(function () {
+    const bgTypeSelect = document.getElementById('bgType');
+    const bgFileLabel = document.getElementById('bgFileLabel');
+    const bgFileSelect = document.getElementById('bgFile');
+
+    function updateFileVisibility() {
+        const isFileSelected = bgTypeSelect.value === 'file';
+        bgFileLabel.style.display = isFileSelected ? 'block' : 'none';
+        bgFileSelect.style.display = isFileSelected ? 'block' : 'none';
+    }
+
+    bgTypeSelect.addEventListener('change', updateFileVisibility);
+    updateFileVisibility();
+})();
