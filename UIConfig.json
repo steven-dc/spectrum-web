@@ -1118,13 +1118,6 @@
           "value": true
         },
         {
-          "id": "showFPS",
-          "element": "switch",
-          "label": "TRANSLATE.SPECTRUM_WEB.SHOW_FPS",
-          "doc": "Display current frame rate",
-          "value": false
-        },
-        {
           "id": "loRes",
           "element": "switch",
           "label": "TRANSLATE.SPECTRUM_WEB.LO_RES",

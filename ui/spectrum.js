@@ -4,15 +4,68 @@
 let audioMotion = null;
 let ws = null;
 let pcmPlayer = null;
+let mpdPlayer = null;
+let currentAudioSource = 'websocket'; // 'websocket' or 'mpd'
 let reconnectTimer = null;
 let sharedAudioContext = null;
 let volumioStateInterval = null;
+let volumioSocket = null;
+let intentionalDisconnect = false;
 let progressInterval = null;
 let queuePanelVisible = false;
 let wsConnectTimeout = null;
 let frameCount = 0;
 let dataReceived = 0;
 let lastFpsTime = Date.now();
+let fpsInterval = null;
+
+// ===========================
+// VOLUMIO SOCKET.IO (PUSH UPDATES)
+// ===========================
+function connectVolumioSocket() {
+    if (typeof io === 'undefined') {
+        console.warn('[Volumio Socket] Socket.IO client not available; using HTTP polling');
+        return;
+    }
+    try {
+        const base = getVolumioUrl(); // e.g., http://host:3000
+        console.log('[Volumio Socket] Connecting to', base);
+        volumioSocket = io(base, { transports: ['websocket'], path: '/socket.io' });
+
+        volumioSocket.on('connect', () => {
+            console.log('[Volumio Socket] Connected');
+            // Stop polling if active
+            if (volumioStateInterval) {
+                clearInterval(volumioStateInterval);
+                volumioStateInterval = null;
+            }
+            // Request initial state/queue
+            try { volumioSocket.emit('getState'); } catch (_) {}
+            try { volumioSocket.emit('getQueue'); } catch (_) {}
+        });
+
+        volumioSocket.on('disconnect', () => {
+            console.warn('[Volumio Socket] Disconnected; fallback to polling');
+            // Resume polling
+            if (!volumioStateInterval) {
+                volumioStateInterval = setInterval(fetchVolumioState, 2000);
+            }
+        });
+
+        volumioSocket.on('pushState', (state) => {
+            // console.log('[Volumio Socket] pushState', state);
+            updateNowPlaying(state);
+        });
+
+        volumioSocket.on('pushQueue', (queue) => {
+            // console.log('[Volumio Socket] pushQueue', queue);
+            displayQueue(Array.isArray(queue) ? queue : (queue && queue.queue) || []);
+        });
+
+    } catch (e) {
+        console.warn('[Volumio Socket] Error:', e.message);
+    }
+}
 
 let audioFormat = { sampleRate: 44100, channels: 2, bitsPerSample: 16 };
 let audioStarted = false;
@@ -172,30 +225,104 @@ class PCMPlayer {
     constructor(format, audioContext) {
         this.format = format;
         this.audioContext = audioContext;
-        this.scriptNode = this.audioContext.createScriptProcessor(4096, 0, format.channels);
         this.analyzerGain = this.audioContext.createGain();
         this.analyzerGain.gain.value = 1.0;
-        
-        // Kết nối đơn giản: scriptNode -> analyzerGain (không connect đến destination)
-        this.scriptNode.connect(this.analyzerGain);
-        
+        this.sinkGain = this.audioContext.createGain();
+        this.sinkGain.gain.value = 0.0; // silent sink to keep graph pulling
+        this.analyzerGain.connect(this.sinkGain);
+        this.sinkGain.connect(this.audioContext.destination);
+
+        this.workletReady = false;
+        this.useWorklet = !!this.audioContext.audioWorklet;
+        this.node = null;
+
+        // Fallback (ScriptProcessor)
+        this.scriptNode = null;
         this.buffer = new Float32Array(0);
         this.samplesPlayed = 0;
         this.isFirstChunk = true;
-        this.scriptNode.onaudioprocess = (e) => this.processAudio(e);
-        console.log('[PCM] Initialized - Audio will go through AudioMotion');
+
+        this.pendingChunks = [];
+        console.log('[PCM] Initializing (AudioWorklet preferred)');
     }
-    
+
+    async init() {
+        if (this.useWorklet) {
+            try {
+                await this.audioContext.audioWorklet.addModule('pcm-worklet.js');
+                this.node = new AudioWorkletNode(this.audioContext, 'pcm-processor', {
+                    numberOfInputs: 0,
+                    numberOfOutputs: 1,
+                    outputChannelCount: [this.format.channels],
+                    channelCount: this.format.channels,
+                    channelCountMode: 'explicit',
+                    channelInterpretation: 'speakers'
+                });
+                this.node.connect(this.analyzerGain);
+                this.node.port.postMessage({ type: 'config', channels: this.format.channels });
+                this.node.port.onmessage = (e) => {
+                    const msg = e.data || {};
+                    if (msg.type === 'processed') {
+                        frameCount++;
+                    }
+                };
+                this.workletReady = true;
+                // Drain any queued samples
+                if (this.pendingChunks.length) {
+                    this.pendingChunks.forEach(arr => this._postSamples(arr));
+                    this.pendingChunks = [];
+                }
+                console.log('[PCM] AudioWorklet ready');
+                return;
+            } catch (e) {
+                console.warn('[PCM] Worklet init failed, falling back:', e.message);
+                this.useWorklet = false;
+            }
+        }
+
+        // Fallback path: ScriptProcessor
+        this.scriptNode = this.audioContext.createScriptProcessor(4096, 0, this.format.channels);
+        this.scriptNode.onaudioprocess = (e) => this.processAudio(e);
+        this.scriptNode.connect(this.analyzerGain);
+        const MAX_BUFFER_MS = 500;
+        this.maxBufferSamples = Math.max(
+            this.format.channels,
+            Math.floor((this.audioContext.sampleRate || this.format.sampleRate) * this.format.channels * (MAX_BUFFER_MS / 1000))
+        );
+        console.log('[PCM] Fallback ScriptProcessor ready');
+    }
+
+    _postSamples(floatSamples) {
+        if (!this.node) return;
+        try {
+            this.node.port.postMessage({ type: 'samples', samples: floatSamples }, [floatSamples.buffer]);
+        } catch (_) {
+            // structured clone fallback if transfer fails
+            this.node.port.postMessage({ type: 'samples', samples: floatSamples });
+        }
+    }
+
     feed(chunk) {
         const samples = new Int16Array(chunk.buffer, chunk.byteOffset, chunk.byteLength / 2);
         const floatSamples = new Float32Array(samples.length);
         for (let i = 0; i < samples.length; i++) {
             floatSamples[i] = samples[i] / 32768.0;
         }
-        const newBuffer = new Float32Array(this.buffer.length + floatSamples.length);
-        newBuffer.set(this.buffer);
-        newBuffer.set(floatSamples, this.buffer.length);
-        this.buffer = newBuffer;
+
+        if (this.useWorklet) {
+            if (this.workletReady) this._postSamples(floatSamples);
+            else this.pendingChunks.push(floatSamples);
+        } else {
+            const newBuffer = new Float32Array(this.buffer.length + floatSamples.length);
+            newBuffer.set(this.buffer);
+            newBuffer.set(floatSamples, this.buffer.length);
+            this.buffer = newBuffer;
+            if (this.buffer.length > this.maxBufferSamples) {
+                const trimmed = new Float32Array(this.maxBufferSamples);
+                trimmed.set(this.buffer.subarray(this.buffer.length - this.maxBufferSamples));
+                this.buffer = trimmed;
+            }
+        }
 
         if (this.isFirstChunk && floatSamples.length > 0) {
             this.isFirstChunk = false;
@@ -204,6 +331,7 @@ class PCMPlayer {
     }
 
     processAudio(e) {
+        if (!this.scriptNode) return;
         const outputBuffer = e.outputBuffer;
         const bufferSize = outputBuffer.length;
         const samplesNeeded = bufferSize * this.format.channels;
@@ -218,17 +346,318 @@ class PCMPlayer {
             }
             this.buffer = this.buffer.slice(samplesNeeded);
             this.samplesPlayed += samplesNeeded;
+            frameCount++;
         } else {
             for (let ch = 0; ch < outputBuffer.numberOfChannels; ch++) {
                 outputBuffer.getChannelData(ch).fill(0);
             }
         }
     }
-    
+
     getSourceNode() {
         return this.analyzerGain;
     }
 }
+
+// ===========================
+// MPD PLAYER CLASS
+// ===========================
+class MPDPlayer {
+    constructor(audioContext, url = getMpdHtmlUrl()) {
+        this.audioContext = audioContext;
+        this.url = url;
+        this.audio = null;
+        this.analyzerGain = null;
+        this.mediaSource = null;
+        this.isPlaying = false;
+        this.isFirstPlay = true;
+        
+        console.log('[MPD] Initializing with URL:', url);
+    }
+
+    async start() {
+        try {
+            if (this.audio) {
+                console.log('[MPD] Already initialized');
+                return;
+            }
+
+            // Create audio element
+            this.audio = new Audio();
+            this.audio.crossOrigin = 'anonymous';
+            this.audio.src = this.url;
+            this.audio.preload = 'auto';
+            
+            // Create audio nodes
+            this.mediaSource = this.audioContext.createMediaElementSource(this.audio);
+            this.analyzerGain = this.audioContext.createGain();
+            this.analyzerGain.gain.value = 1.0;
+            
+            // Connect: mediaSource -> analyzerGain (không connect đến destination để tránh phát 2 lần)
+            this.mediaSource.connect(this.analyzerGain);
+            
+            // Setup event listeners
+            this.audio.addEventListener('canplay', () => {
+                if (this.isFirstPlay) {
+                    console.log('[MPD] Audio ready, starting playback...');
+                    this.isFirstPlay = false;
+                }
+            });
+            
+            this.audio.addEventListener('playing', () => {
+                this.isPlaying = true;
+                console.log('[MPD] Audio playing');
+            });
+            
+            this.audio.addEventListener('pause', () => {
+                this.isPlaying = false;
+                console.log('[MPD] Audio paused');
+            });
+            
+            this.audio.addEventListener('error', (e) => {
+                console.error('[MPD] Audio error:', e);
+                this.isPlaying = false;
+            });
+            
+            this.audio.addEventListener('stalled', () => {
+                console.warn('[MPD] Audio stalled, attempting to recover...');
+            });
+            
+            // Start playback
+            await this.audio.play();
+            console.log('[MPD] ✓ Started successfully');
+            
+        } catch (e) {
+            console.error('[MPD] Start failed:', e);
+            throw e;
+        }
+    }
+
+    stop() {
+        try {
+            if (this.audio) {
+                this.audio.pause();
+                this.audio.src = '';
+                this.audio = null;
+            }
+            
+            if (this.mediaSource) {
+                this.mediaSource.disconnect();
+                this.mediaSource = null;
+            }
+            
+            if (this.analyzerGain) {
+                this.analyzerGain.disconnect();
+                this.analyzerGain = null;
+            }
+            
+            this.isPlaying = false;
+            console.log('[MPD] Stopped');
+        } catch (e) {
+            console.error('[MPD] Stop error:', e);
+        }
+    }
+
+    getSourceNode() {
+        return this.analyzerGain;
+    }
+
+    setUrl(url) {
+        const wasPlaying = this.isPlaying;
+        this.stop();
+        this.url = url;
+        if (wasPlaying) {
+            this.start();
+        }
+    }
+
+    getStatus() {
+        return {
+            isPlaying: this.isPlaying,
+            url: this.url,
+            readyState: this.audio ? this.audio.readyState : 0,
+            networkState: this.audio ? this.audio.networkState : 0
+        };
+    }
+}
+
+// ===========================
+// AUDIO SOURCE MANAGER
+// ===========================
+async function switchAudioSource(source, mpdUrl = null) {
+    console.log(`[Audio Source] Switching to: ${source}`);
+    
+    try {
+        // Update source first
+        currentAudioSource = source;
+        
+        // Stop current audio source
+        await stopCurrentAudioSource();
+        
+        // Start new audio source
+        if (source === 'mpd') {
+            await startMPDAudio(mpdUrl || getMpdHtmlUrl());
+        } else {
+            await startWebSocketSource();
+        }
+        
+        console.log(`[Audio Source] ✓ Switched to ${source}`);
+        return { success: true };
+        
+    } catch (e) {
+        console.error('[Audio Source] Switch failed:', e);
+        return { success: false, error: e.message };
+    }
+}
+
+async function stopCurrentAudioSource() {
+    console.log('[Audio Source] Stopping current source...');
+    console.log('[Audio Source] MPD player active:', !!mpdPlayer);
+    console.log('[Audio Source] PCM player active:', !!pcmPlayer);
+    console.log('[Audio Source] WebSocket active:', ws ? ws.readyState : 'null');
+    
+    // Stop MPD player if active
+    if (mpdPlayer) {
+        console.log('[Audio Source] Stopping MPD player...');
+        mpdPlayer.stop();
+        if (audioMotion && mpdPlayer.getSourceNode()) {
+            try {
+                audioMotion.disconnectInput(mpdPlayer.getSourceNode());
+                console.log('[Audio Source] ✓ MPD disconnected from AudioMotion');
+            } catch (e) {
+                console.warn('[Audio Source] Could not disconnect MPD:', e);
+            }
+        }
+        mpdPlayer = null;
+    }
+    
+    // Stop WebSocket/PCM player if active
+    if (pcmPlayer) {
+        console.log('[Audio Source] Stopping PCM player...');
+        if (audioMotion && pcmPlayer.getSourceNode()) {
+            try {
+                audioMotion.disconnectInput(pcmPlayer.getSourceNode());
+                console.log('[Audio Source] ✓ PCM disconnected from AudioMotion');
+            } catch (e) {
+                console.warn('[Audio Source] Could not disconnect PCM:', e);
+            }
+        }
+        pcmPlayer = null;
+    }
+    
+    // Close WebSocket if active
+    if (ws) {
+        console.log('[Audio Source] Closing WebSocket (state:', ws.readyState, ')');
+        intentionalDisconnect = true; // Prevent auto-reconnect
+        try {
+            ws.close();
+            console.log('[Audio Source] ✓ WebSocket close() called');
+        } catch (e) {
+            console.warn('[Audio Source] WebSocket close error:', e);
+        }
+        ws = null;
+    }
+    
+    // Clear reconnect timer if any
+    if (reconnectTimer) {
+        console.log('[Audio Source] Clearing reconnect timer');
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+    
+    audioStarted = false;
+    console.log('[Audio Source] ✓ Current source stopped');
+}
+
+async function startMPDAudio(url) {
+    console.log('[Audio Source] Starting MPD audio from:', url);
+    
+    if (!sharedAudioContext) {
+        console.log('[MPD] Creating new AudioContext...');
+        const ctx = new (window.AudioContext || window.webkitAudioContext)({
+            sampleRate: 44100
+        });
+        sharedAudioContext = ctx;
+        console.log('[MPD] AudioContext created, state:', ctx.state);
+    }
+    
+    if (sharedAudioContext.state === 'suspended') {
+        console.log('[MPD] Resuming suspended AudioContext...');
+        await sharedAudioContext.resume();
+        console.log('[MPD] AudioContext resumed, state:', sharedAudioContext.state);
+    }
+    
+    console.log('[MPD] Creating MPDPlayer instance...');
+    mpdPlayer = new MPDPlayer(sharedAudioContext, url);
+    
+    console.log('[MPD] Starting MPDPlayer...');
+    await mpdPlayer.start();
+    console.log('[MPD] ✓ MPDPlayer started');
+    
+    if (audioMotion && mpdPlayer.getSourceNode()) {
+        console.log('[MPD] Connecting to AudioMotion...');
+        audioMotion.connectInput(mpdPlayer.getSourceNode());
+        console.log('[Audio Source] ✓ MPD connected to AudioMotion');
+    } else {
+        console.warn('[MPD] Cannot connect to AudioMotion:', { audioMotion: !!audioMotion, sourceNode: !!mpdPlayer.getSourceNode() });
+    }
+    
+    audioStarted = true;
+    
+    // Hide click prompt if visible
+    const prompt = document.getElementById('clickPrompt');
+    if (prompt) {
+        prompt.classList.add('hidden');
+    }
+    
+    // Start Volumio state updates (prefer socket, fallback to polling)
+    if (!(volumioSocket && volumioSocket.connected) && window.fetchVolumioState) {
+        window.fetchVolumioState();
+        volumioStateInterval = setInterval(window.fetchVolumioState, 2000);
+    }
+    
+    console.log('[MPD] ✓ MPD audio source fully initialized');
+}
+
+async function startWebSocketSource() {
+    console.log('[Audio Source] Starting WebSocket audio');
+    
+    connectWebSocket();
+    
+    // Wait a bit for WebSocket to connect
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // The actual audio will start when user clicks
+    const prompt = document.getElementById('clickPrompt');
+    if (prompt) {
+        prompt.classList.remove('hidden');
+    }
+}
+
+function getAudioSourceStatus() {
+    const source = currentAudioSource;
+    
+    if (source === 'mpd') {
+        if (mpdPlayer) {
+            return {
+                source: 'mpd',
+                status: mpdPlayer.getStatus()
+            };
+        }
+        return { source: 'mpd', status: 'not initialized' };
+    } else {
+        return {
+            source: 'websocket',
+            connected: ws && ws.readyState === WebSocket.OPEN,
+            audioStarted: audioStarted
+        };
+    }
+}
+
+// Make functions available globally
+window.switchAudioSource = switchAudioSource;
+window.getAudioSourceStatus = getAudioSourceStatus;
+window.MPDPlayer = MPDPlayer;
 
 // Initialize when ready
 // if (window.pcmPlayer) {
@@ -280,6 +709,10 @@ function getVolumioApiUrl() {
 function getSettingsApiUrl() {
     return `http://${getBaseUrl()}:8090`;
 }
+function getMpdHtmlUrl() {
+    return `http://${getBaseUrl()}:8001`;
+}
+
 
 function toggleSettings() {
     settingsPanelVisible = !settingsPanelVisible;
@@ -609,18 +1042,21 @@ function setupEventListeners() {
         if (audioMotion) audioMotion.peakHoldTime = parseInt(this.value);
     });
 
-    // // Display
-    // addListener("showFPS", "click", function () {
-    //     const active = this.dataset.active === '1';
-    //     this.dataset.active = active ? '0' : '1';
-    //     if (audioMotion) audioMotion.showFPS = !active;
-    // });
+    // Display
+    addListener("showFPS", "click", function () {
+        const wasActive = this.dataset.active === '1';
+        const nowActive = !wasActive;
+        this.dataset.active = nowActive ? '1' : '0';
+        if (audioMotion) audioMotion.showFPS = nowActive;
+        ensureFpsCounterTimer();
+    });
 
-    // addListener("loRes", "click", function () {
-    //     const active = this.dataset.active === '1';
-    //     this.dataset.active = active ? '0' : '1';
-    //     if (audioMotion) audioMotion.loRes = !active;
-    // });
+    addListener("loRes", "click", function () {
+        const wasActive = this.dataset.active === '1';
+        const nowActive = !wasActive;
+        this.dataset.active = nowActive ? '1' : '0';
+        applyLoRes(nowActive);
+    });
 
     // General
     // addListener("maxFPS", "change", function () {
@@ -793,8 +1229,8 @@ function getCurrentSettings() {
         linkGrads: document.getElementById('linkGrads')?.dataset.active === '1',
         splitGrad: document.getElementById('splitGrad')?.dataset.active === '1',
         // maxFPS: parseInt(document.getElementById('maxFPS')?.value || 60),
-        // showFPS: document.getElementById('showFPS')?.dataset.active === '1',
-        // loRes: document.getElementById('loRes')?.dataset.active === '1'
+        showFPS: document.getElementById('showFPS')?.dataset.active === '1',
+        loRes: document.getElementById('loRes')?.dataset.active === '1'
     };
 }
 
@@ -1021,17 +1457,18 @@ function applyPreset(preset) {
     //     if (maxFPSSelect) maxFPSSelect.value = preset.maxFPS;
     // }
 
-    // if (preset.showFPS !== undefined) {
-    //     audioMotion.showFPS = preset.showFPS;
-    //     const showFPSEl = document.getElementById('showFPS');
-    //     if (showFPSEl) showFPSEl.dataset.active = preset.showFPS ? '1' : '0';
-    // }
+    if (preset.showFPS !== undefined) {
+        audioMotion.showFPS = preset.showFPS;
+        const showFPSEl = document.getElementById('showFPS');
+        if (showFPSEl) showFPSEl.dataset.active = preset.showFPS ? '1' : '0';
+        ensureFpsCounterTimer();
+    }
 
-    // if (preset.loRes !== undefined) {
-    //     audioMotion.loRes = preset.loRes;
-    //     const loResEl = document.getElementById('loRes');
-    //     if (loResEl) loResEl.dataset.active = preset.loRes ? '1' : '0';
-    // }
+    if (preset.loRes !== undefined) {
+        const loResEl = document.getElementById('loRes');
+        if (loResEl) loResEl.dataset.active = preset.loRes ? '1' : '0';
+        applyLoRes(!!preset.loRes);
+    }
 
     if (preset.linkGrads !== undefined) {
         const linkEl = document.getElementById('linkGrads');
@@ -1267,7 +1704,14 @@ function applyBackground() {
             bgVideo.src = `backgrounds/${encodeURIComponent(videoFile)}`;
             bgVideo.play()
                 .then(() => console.log('[BG] Video playing:', videoFile))
-                .catch(e => console.error('[BG] Video play error:', e));
+                .catch(e => {
+                    if (e && e.name === 'AbortError') {
+                        // Benign when play() is interrupted by a quick pause/source change
+                        console.debug('[BG] Video play aborted (benign)');
+                    } else {
+                        console.error('[BG] Video play error:', e);
+                    }
+                });
 
             currentBackground = bgVideo;
         } else {
@@ -1465,6 +1909,8 @@ function updateProgressBar() {
 
 async function fetchVolumioState(progressOnly = false) {
     try {
+        // If socket is connected, skip HTTP polling
+        if (volumioSocket && volumioSocket.connected) return;
         const response = await fetch(`${getVolumioUrl()}/api/v1/getState`);
         if (!response.ok) throw new Error('Failed to fetch state');
 
@@ -2037,7 +2483,7 @@ function connectWebSocket() {
 
     const wsUrl = getWebSocketUrl();
 
-    if (!forceConnected) updateStatus('connecting');
+    if (!intentionalDisconnect) updateStatus('connecting');
     console.log('[WS] Connecting to:', wsUrl);
 
     try {
@@ -2066,7 +2512,7 @@ function connectWebSocket() {
             }
             console.log('[WS] Connected');
             updateStatus('connected');
-            forceConnected = false;
+            intentionalDisconnect = false;
             if (reconnectTimer) {
                 clearTimeout(reconnectTimer);
                 reconnectTimer = null;
@@ -2080,6 +2526,7 @@ function connectWebSocket() {
                     if (data.type === 'settings') {
                         console.log('[WS] Received settings update');
                         applyServerSettings(data.data);
+                        try { syncUIWithSettings(data.data); } catch (e) { /* no-op */ }
                     } else if (data.type === 'format') {
                         audioFormat = {
                             sampleRate: data.sampleRate,
@@ -2101,7 +2548,6 @@ function connectWebSocket() {
                     if (pcmPlayer) {
                         pcmPlayer.feed(new Uint8Array(event.data));
                         dataReceived++;
-                        frameCount++;
                     }
                 }
             } catch (e) {
@@ -2115,7 +2561,7 @@ function connectWebSocket() {
                 wsConnectTimeout = null;
             }
             console.error('[WS] Error:', err);
-            if (!forceConnected) updateStatus('disconnected');
+            if (!intentionalDisconnect) updateStatus('disconnected');
         };
 
         ws.onclose = () => {
@@ -2124,11 +2570,13 @@ function connectWebSocket() {
                 wsConnectTimeout = null;
             }
             console.log('[WS] Closed');
-            if (!forceConnected) updateStatus('disconnected');
+            if (!intentionalDisconnect) updateStatus('disconnected');
             ws = null;
-            if (!reconnectTimer) {
+            // Only auto-reconnect if we're using websocket source and disconnect wasn't intentional
+            if (!intentionalDisconnect && currentAudioSource === 'websocket' && !reconnectTimer) {
                 reconnectTimer = setTimeout(() => connectWebSocket(), 3000);
             }
+            intentionalDisconnect = false; // Reset flag
         };
 
     } catch (e) {
@@ -2137,8 +2585,9 @@ function connectWebSocket() {
             wsConnectTimeout = null;
         }
         console.error('[WS] Connection error:', e);
-        if (!forceConnected) updateStatus('disconnected');
-        if (!reconnectTimer) {
+        if (!intentionalDisconnect) updateStatus('disconnected');
+        // Only auto-reconnect if using websocket source
+        if (currentAudioSource === 'websocket' && !reconnectTimer) {
             reconnectTimer = setTimeout(() => connectWebSocket(), 5000);
         }
     }
@@ -2177,6 +2626,9 @@ async function startAudio() {
             throw new Error('AudioContext not running');
         }
         pcmPlayer = new PCMPlayer(audioFormat, sharedAudioContext);
+        if (pcmPlayer.init) {
+            await pcmPlayer.init();
+        }
         window.pcmPlayer = pcmPlayer;
         if (audioMotion && pcmPlayer) {
             audioMotion.connectInput(pcmPlayer.getSourceNode());
@@ -2188,10 +2640,12 @@ async function startAudio() {
         if (prompt) {
             prompt.classList.add('hidden');
         }
-        // Start Volumio state polling
-        fetchVolumioState();
-        if (volumioStateInterval) clearInterval(volumioStateInterval);
-        volumioStateInterval = setInterval(fetchVolumioState, 2000);
+        // Start Volumio state updates (prefer socket, fallback to polling)
+        if (!(volumioSocket && volumioSocket.connected)) {
+            fetchVolumioState();
+            if (volumioStateInterval) clearInterval(volumioStateInterval);
+            volumioStateInterval = setInterval(fetchVolumioState, 2000);
+        }
 
         console.log('[Audio] ✓ Started successfully');
         
@@ -2207,22 +2661,37 @@ async function startAudio() {
 
 
 // Setup global click handler to enable audio on user interaction
-// function setupUserInteractionHandler() {
-//     const handleUserInteraction = async () => {
-//         try {
-//             await startAudio();
-//         } catch (e) {
-//             console.error('[Audio] Failed to start after user interaction:', e);
-//         }
-//     };
+function setupUserInteractionHandler() {
+    let armed = true;
+    const handleUserInteraction = async () => {
+        if (!armed) return;
+        armed = false;
+        try {
+            await startAudio();
+        } catch (e) {
+            console.error('[Audio] Failed to start after user interaction:', e);
+        } finally {
+            // Hide prompt if visible
+            const prompt = document.getElementById('clickPrompt');
+            if (prompt) prompt.classList.add('hidden');
+            // Remove listeners
+            window.removeEventListener('click', handleUserInteraction);
+            window.removeEventListener('touchstart', handleUserInteraction, { passive: true });
+            window.removeEventListener('keydown', handleUserInteraction);
+        }
+    };
 
-//     // Listen for click on the prompt button
-//     const promptButton = document.getElementById('startAudioBtn');
-//     if (promptButton) {
-//         promptButton.addEventListener('click', handleUserInteraction);
-//         console.log('[Audio] User interaction handler ready');
-//     }
-// }
+    // Listen for click on the prompt button
+    const promptButton = document.getElementById('startAudioBtn');
+    if (promptButton) {
+        promptButton.addEventListener('click', handleUserInteraction);
+    }
+    // Also arm global unlock on first user gesture anywhere
+    window.addEventListener('click', handleUserInteraction);
+    window.addEventListener('touchstart', handleUserInteraction, { passive: true });
+    window.addEventListener('keydown', handleUserInteraction);
+    console.log('[Audio] User interaction handler ready');
+}
 
 
 // ===========================
@@ -2275,6 +2744,37 @@ function updateFPS() {
 
     frameCount = 0;
     lastFpsTime = now;
+}
+
+// Ensure FPS timer and UI reflect current setting
+function ensureFpsCounterTimer() {
+    const showFpsActive = document.getElementById('showFPS')?.dataset.active === '1';
+    const counter = document.getElementById('fpsCounter');
+    if (counter) counter.style.display = showFpsActive ? '' : 'none';
+
+    if (showFpsActive && !fpsInterval) {
+        fpsInterval = setInterval(updateFPS, 1000);
+    } else if (!showFpsActive && fpsInterval) {
+        clearInterval(fpsInterval);
+        fpsInterval = null;
+    }
+}
+
+// Apply low-resolution rendering hint to canvas and analyzer
+function applyLoRes(active) {
+    const canvas = document.getElementById('canvasContainer')?.querySelector('canvas');
+    if (canvas) {
+        // Visual cue for lower fidelity rendering
+        canvas.style.imageRendering = active ? 'pixelated' : '';
+    }
+    if (audioMotion) {
+        // Preserve flag for server sync
+        audioMotion.loRes = active;
+        // Optionally lower fftSize when in lo-res for performance
+        try {
+            if (active && audioMotion.fftSize > 4096) audioMotion.fftSize = 4096;
+        } catch (e) { /* no-op */ }
+    }
 }
 
 // ===========================
@@ -2386,8 +2886,13 @@ async function initAudioMotion() {
             updateBackgroundControls();
             applyBackground();
         });
-        connectWebSocket();
-        setInterval(updateFPS, 1000);
+        
+        // Only connect WebSocket if it's the current audio source
+        if (currentAudioSource === 'websocket') {
+            connectWebSocket();
+        }
+        
+        ensureFpsCounterTimer();
 
     } catch (e) {
         console.error('[AM] Init error:', e);
@@ -2496,12 +3001,14 @@ async function uploadSettings() {
         document.querySelectorAll('#settingsPanel .switch').forEach(sw => {
             if (sw.id) settings[sw.id] = sw.getAttribute('data-active') === '1';
         });
-        console.log("POST body:", JSON.stringify(settings));
+        // Normalize to server schema and proper types
+        const payload = normalizeSettingsForServer(settings);
+        console.log("POST body:", JSON.stringify(payload));
         // POST to server
-        const res = await fetch('/api/settings', {
+        const res = await fetch(`${getSettingsApiUrl()}/api/settings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(settings)
+            body: JSON.stringify(payload)
         });
 
         if (!res.ok) {
@@ -2509,6 +3016,11 @@ async function uploadSettings() {
             throw new Error(txt || res.statusText);
         }
 
+        // Apply locally right away
+        try {
+            applyServerSettings(payload);
+            syncUIWithSettings(payload);
+        } catch (_) {}
         alert('Settings uploaded to server');
     } catch (err) {
         alert('Failed to upload settings: ' + (err.message || err));
@@ -2516,6 +3028,54 @@ async function uploadSettings() {
         btn.disabled = false;
         btn.textContent = origText;
     }
+}
+
+// Convert UI-collected settings to server schema with correct types and aliases
+function normalizeSettingsForServer(src) {
+    const out = { ...src };
+
+    // Numeric conversions
+    const intKeys = ['mode','fftSize','minFreq','maxFreq','ansiBands','linearAmplitude','peakFade','peakHold','npX','npY','npW'];
+    intKeys.forEach(k => { if (k in out) out[k] = parseInt(out[k], 10); });
+    const floatKeys = ['gravity','barSpace','lineWidth','fillAlpha','smoothing','radius','spinSpeed','bgDim','volume'];
+    floatKeys.forEach(k => { if (k in out) out[k] = parseFloat(out[k]); });
+
+    // Frequency scale alias
+    out.frequencyScale = out.freqScale || out.frequencyScale || 'log';
+
+    // Scale X/Y mapping
+    const scaleX = (out.scaleX ?? '1').toString();
+    out.showScaleX = scaleX; // server seems to store as string "0|1|2"
+    out.scaleY = out.showScaleY ? '1' : '0';
+    if (scaleX === '2') out.noteLabels = true; else if (scaleX === '0') out.noteLabels = false;
+
+    // Reflex mapping (ratio)
+    const reflex = (out.reflex ?? '0').toString();
+    const ratio = reflex === '3' ? 0.25 : reflex === '1' ? 0.4 : reflex === '2' ? 0.5 : 0;
+    out.reflexRatio = ratio;
+
+    // Mirror ensure string for server but number in analyzer will be handled elsewhere
+    if (out.mirror != null) out.mirror = out.mirror.toString();
+
+    // Color/gradients
+    if (!out.gradientRight && out.gradient) out.gradientRight = out.gradient;
+
+    // FPS flags
+    if (typeof out.showFPS === 'undefined') out.showFPS = false;
+
+    // Booleans already collected for switches and checkboxes
+
+    // Background defaults
+    out.bgFit = out.bgFit || 'cover';
+    out.bgType = out.bgType || 'none';
+
+    // Preserve URLs if present in DOM (not always collected automatically)
+    const wsUrl = document.getElementById('wsUrl')?.value;
+    const volumioUrl = document.getElementById('volumioUrl')?.value;
+    if (wsUrl) out.wsUrl = wsUrl;
+    if (volumioUrl) out.volumioUrl = volumioUrl;
+
+    return out;
 }
 
 // Sync UI elements with loaded settings
@@ -2598,10 +3158,11 @@ function syncUIWithSettings(settings) {
             }
         });
 
-        // Split Grad
-        if (settings.splitGradient !== undefined) {
+        // Split Grad (support both splitGrad and splitGradient keys)
+        if (settings.splitGrad !== undefined || settings.splitGradient !== undefined) {
+            const val = settings.splitGrad !== undefined ? settings.splitGrad : settings.splitGradient;
             const el = document.getElementById('splitGrad');
-            if (el) el.dataset.active = settings.splitGradient ? '1' : '0';
+            if (el) el.dataset.active = val ? '1' : '0';
         }
 
         // Link Grads
@@ -2647,14 +3208,13 @@ function syncUIWithSettings(settings) {
             }
         }
 
-        // Scale X
+        // Scale X (support string '0|1|2' or booleans/noteLabels)
         if (settings.showScaleX !== undefined || settings.noteLabels !== undefined) {
             let scaleXValue = '1';
-            if (settings.noteLabels === true) {
-                scaleXValue = '2';
-            } else if (settings.showScaleX === false) {
-                scaleXValue = '0';
-            }
+            const sx = settings.showScaleX;
+            if (sx === '0' || sx === 0 || sx === false) scaleXValue = '0';
+            else if (sx === '2' || sx === 2 || settings.noteLabels === true) scaleXValue = '2';
+            else if (sx === '1' || sx === 1 || sx === true) scaleXValue = '1';
             setRadioValue('scaleXSelect', scaleXValue);
         }
 
@@ -2786,17 +3346,51 @@ function syncUIWithSettings(settings) {
         //     if (select) select.value = settings.maxFPS;
         // }
 
-        // // Show FPS
-        // if (settings.showFPS !== undefined) {
-        //     const el = document.getElementById('showFPS');
-        //     if (el) el.dataset.active = settings.showFPS ? '1' : '0';
-        // }
+        // Show FPS
+        if (settings.showFPS !== undefined) {
+            const el = document.getElementById('showFPS');
+            if (el) el.dataset.active = settings.showFPS ? '1' : '0';
+            ensureFpsCounterTimer();
+        }
 
-        // // Lo Res
-        // if (settings.loRes !== undefined) {
-        //     const el = document.getElementById('loRes');
-        //     if (el) el.dataset.active = settings.loRes ? '1' : '0';
-        // }
+        // Lo Res
+        if (settings.loRes !== undefined) {
+            const el = document.getElementById('loRes');
+            if (el) el.dataset.active = settings.loRes ? '1' : '0';
+            applyLoRes(!!settings.loRes);
+        }
+
+        // Sensitivity radio
+        if (settings.sensitivity !== undefined) {
+            const sens = settings.sensitivity.toString();
+            setRadioValue('sensitivitySelect', sens);
+        }
+
+        // Control bar and Now Playing checkboxes
+        const showCtrl = document.getElementById('showControlBar');
+        if (showCtrl && settings.showControlBar !== undefined) {
+            showCtrl.checked = !!settings.showControlBar;
+            showCtrl.dispatchEvent(new Event('change'));
+        }
+        const showNP = document.getElementById('showNowPlaying');
+        if (showNP && settings.showNowPlaying !== undefined) {
+            showNP.checked = !!settings.showNowPlaying;
+            showNP.dispatchEvent(new Event('change'));
+        }
+
+        // Audio Source + MPD URL
+        const audioSourceSelect = document.getElementById('audioSource');
+        const mpdUrlInput = document.getElementById('mpdUrl');
+        const mpdUrlLabel = document.getElementById('mpdUrlLabel');
+        if (audioSourceSelect && settings.audioSource) {
+            audioSourceSelect.value = settings.audioSource;
+            const isMpd = settings.audioSource === 'mpd';
+            if (mpdUrlInput) mpdUrlInput.style.display = isMpd ? 'block' : 'none';
+            if (mpdUrlLabel) mpdUrlLabel.style.display = isMpd ? 'block' : 'none';
+        }
+        if (mpdUrlInput && settings.mpdUrl) {
+            mpdUrlInput.value = settings.mpdUrl;
+        }
 
         console.log('[AM] ✓ UI elements synced with server settings');
 
@@ -2894,6 +3488,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }, 500);
 
     setTimeout(() => { forceConnected = false; }, 5000);
+
+    // Connect to Volumio via Socket.IO for push state
+    setTimeout(connectVolumioSocket, 200);
 });
 
 window.addEventListener("beforeunload", () => {
@@ -3324,4 +3921,77 @@ window.addEventListener("beforeunload", () => {
 
     bgTypeSelect.addEventListener('change', updateFileVisibility);
     updateFileVisibility();
+})();
+
+// ===========================
+// AUDIO SOURCE SETTINGS
+// ===========================
+(function () {
+    const audioSourceSelect = document.getElementById('audioSource');
+    const mpdUrlInput = document.getElementById('mpdUrl');
+    const mpdUrlLabel = document.getElementById('mpdUrlLabel');
+    
+    console.log('[Audio Source UI] Elements found:', {
+        audioSourceSelect: !!audioSourceSelect,
+        mpdUrlInput: !!mpdUrlInput,
+        mpdUrlLabel: !!mpdUrlLabel
+    });
+    
+    if (audioSourceSelect) {
+        audioSourceSelect.addEventListener('change', function() {
+            const isMpd = this.value === 'mpd';
+            console.log('[Audio Source UI] Source changed to:', this.value);
+            if (mpdUrlInput) mpdUrlInput.style.display = isMpd ? 'block' : 'none';
+            if (mpdUrlLabel) mpdUrlLabel.style.display = isMpd ? 'block' : 'none';
+        });
+    }
+    
+    const applyAudioSourceBtn = document.getElementById('applyAudioSourceBtn');
+    console.log('[Audio Source UI] Apply button found:', !!applyAudioSourceBtn);
+    
+    if (applyAudioSourceBtn) {
+        console.log('[Audio Source UI] ✓ Registering click handler for Apply button');
+        applyAudioSourceBtn.addEventListener('click', async function() {
+            console.log('[Audio Source UI] Apply button clicked!');
+            const source = audioSourceSelect ? audioSourceSelect.value : 'websocket';
+            const mpdUrl = mpdUrlInput ? mpdUrlInput.value : 'http://192.168.1.63:8001';
+            const statusDiv = document.getElementById('audioSourceStatus');
+            
+            console.log('[Audio Source UI] Selected source:', source);
+            console.log('[Audio Source UI] MPD URL:', mpdUrl);
+            
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = `Switching to ${source}...`;
+                statusDiv.style.color = '#8b9dc3';
+            }
+            
+            try {
+                console.log('[Audio Source UI] Calling switchAudioSource...');
+                const result = await switchAudioSource(source, mpdUrl);
+                console.log('[Audio Source UI] Switch result:', result);
+                
+                if (statusDiv) {
+                    if (result.success) {
+                        statusDiv.textContent = `✓ Successfully switched to ${source}`;
+                        statusDiv.style.color = '#4ade80';
+                    } else {
+                        statusDiv.textContent = `✗ Failed: ${result.error}`;
+                        statusDiv.style.color = '#f87171';
+                    }
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                    }, 5000);
+                }
+            } catch (e) {
+                console.error('[Audio Source UI] Error:', e);
+                if (statusDiv) {
+                    statusDiv.textContent = `✗ Error: ${e.message}`;
+                    statusDiv.style.color = '#f87171';
+                }
+            }
+        });
+    } else {
+        console.error('[Audio Source UI] ✗ Apply button NOT found! Cannot register event listener.');
+    }
 })();

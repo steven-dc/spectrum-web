@@ -16,17 +16,17 @@ module.exports = SpectrumWeb;
  * ──────────────────────────────────────────────── */
 function SpectrumWeb(context) {
   var self = this;
-  
+
   self.context = context;
   self.commandRouter = context.coreCommand;
   self.logger = self.commandRouter.logger;
-  
+
   self.app = null;
   self.httpServer = null;
   self.wss = null;
   self.fifoStream = null;
   self._fifoWatcher = null;
-  
+
   // File paths
   self.uiConfigFile = path.join(__dirname, 'UIConfig.json');
   self.settingsFile = path.join(__dirname, 'settings.json');
@@ -35,7 +35,7 @@ function SpectrumWeb(context) {
 /* ──────────────────────────────────────────────── *
  *  UIConfig.json Utilities
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.loadUIConfig = function() {
+SpectrumWeb.prototype.loadUIConfig = function () {
   var self = this;
   try {
     return fs.readJsonSync(self.uiConfigFile);
@@ -45,7 +45,7 @@ SpectrumWeb.prototype.loadUIConfig = function() {
   }
 };
 
-SpectrumWeb.prototype.saveUIConfig = function(uiconf) {
+SpectrumWeb.prototype.saveUIConfig = function (uiconf) {
   var self = this;
   try {
     fs.writeJsonSync(self.uiConfigFile, uiconf, { spaces: 2 });
@@ -60,37 +60,37 @@ SpectrumWeb.prototype.saveUIConfig = function(uiconf) {
 /* ──────────────────────────────────────────────── *
  *  Extract settings from UIConfig.json analyzer section
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.extractSettingsFromUIConfig = function() {
+SpectrumWeb.prototype.extractSettingsFromUIConfig = function () {
   var self = this;
   var uiconf = self.loadUIConfig();
-  
+
   if (!uiconf) return {};
-  
-  var analyzerSection = uiconf.sections.find(function(s) { 
-    return s.id === 'analyzer'; 
+
+  var analyzerSection = uiconf.sections.find(function (s) {
+    return s.id === 'analyzer';
   });
-  
+
   if (!analyzerSection) {
     self.logger.warn('[SpectrumWeb] Analyzer section not found in UIConfig.json');
     return {};
   }
-  
+
   var settings = {};
-  
-  analyzerSection.content.forEach(function(item) {
+
+  analyzerSection.content.forEach(function (item) {
     // Skip headers
     if (item.element === 'section') return;
-    
+
     var value = item.value;
-    
+
     // Extract value from select objects
     if (item.element === 'select' && value && typeof value === 'object') {
       value = value.value;
     }
-    
+
     settings[item.id] = value;
   });
-  
+
   self.logger.info('[SpectrumWeb] Extracted ' + Object.keys(settings).length + ' settings from UIConfig.json');
   return settings;
 };
@@ -98,29 +98,29 @@ SpectrumWeb.prototype.extractSettingsFromUIConfig = function() {
 /* ──────────────────────────────────────────────── *
  *  Update UIConfig.json with new values
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.updateUIConfigValues = function(data) {
+SpectrumWeb.prototype.updateUIConfigValues = function (data) {
   var self = this;
   var uiconf = self.loadUIConfig();
-  
+
   if (!uiconf) return false;
-  
-  var analyzerSection = uiconf.sections.find(function(s) { 
-    return s.id === 'analyzer'; 
+
+  var analyzerSection = uiconf.sections.find(function (s) {
+    return s.id === 'analyzer';
   });
-  
+
   if (!analyzerSection) return false;
-  
+
   var updated = 0;
-  
+
   for (var key in data) {
     if (data.hasOwnProperty(key)) {
-      var item = analyzerSection.content.find(function(c) { 
-        return c.id === key; 
+      var item = analyzerSection.content.find(function (c) {
+        return c.id === key;
       });
-      
+
       if (item && item.element !== 'section') {
         var value = data[key];
-        
+
         // Handle select dropdowns
         if (item.element === 'select') {
           // If value is already an object, use it
@@ -128,8 +128,8 @@ SpectrumWeb.prototype.updateUIConfigValues = function(data) {
             item.value = value;
           } else {
             // Find matching option
-            var option = item.options.find(function(o) { 
-              return String(o.value) === String(value); 
+            var option = item.options.find(function (o) {
+              return String(o.value) === String(value);
             });
             if (option) {
               item.value = option;
@@ -141,30 +141,30 @@ SpectrumWeb.prototype.updateUIConfigValues = function(data) {
         } else {
           item.value = value;
         }
-        
+
         updated++;
         self.logger.info('[SpectrumWeb] Updated UIConfig: ' + key + ' = ' + JSON.stringify(item.value));
       }
     }
   }
-  
+
   if (updated > 0) {
     self.saveUIConfig(uiconf);
     self.logger.info('[SpectrumWeb] Updated ' + updated + ' values in UIConfig.json');
     return true;
   }
-  
+
   return false;
 };
 
 /* ──────────────────────────────────────────────── *
  *  Sync settings.json from UIConfig.json
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.syncSettingsFromUIConfig = function() {
+SpectrumWeb.prototype.syncSettingsFromUIConfig = function () {
   var self = this;
-  
+
   var settings = self.extractSettingsFromUIConfig();
-  
+
   try {
     fs.writeJsonSync(self.settingsFile, settings, { spaces: 2 });
     self.logger.info('[SpectrumWeb] settings.json synced from UIConfig.json');
@@ -178,7 +178,7 @@ SpectrumWeb.prototype.syncSettingsFromUIConfig = function() {
 /* ──────────────────────────────────────────────── *
  *  Load settings from settings.json (for client API)
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.loadSettings = function() {
+SpectrumWeb.prototype.loadSettings = function () {
   var self = this;
   try {
     if (fs.existsSync(self.settingsFile)) {
@@ -199,15 +199,15 @@ SpectrumWeb.prototype.loadSettings = function() {
 /* ──────────────────────────────────────────────── *
  *  Volumio Lifecycle
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.onVolumioStart = function() {
+SpectrumWeb.prototype.onVolumioStart = function () {
   var self = this;
   var configFile = self.commandRouter.pluginManager.getConfigurationFile(self.context, 'config.json');
-  
+
   self.logger.info('[SpectrumWeb] Config file: ' + configFile);
-  
+
   self.config = new (require('v-conf'))();
   self.config.loadFile(configFile);
-  
+
   // Set default values for general config
   self.config.addConfigValue('appPort', 'number', 8090);
   self.config.addConfigValue('wsPort', 'number', 9001);
@@ -215,17 +215,17 @@ SpectrumWeb.prototype.onVolumioStart = function() {
   self.config.addConfigValue('kioskEnabled', 'boolean', false);
   var appPort = self.config.get('appPort') || 8090;
   self.config.addConfigValue('kioskUrl', 'string', 'http://localhost:' + appPort);
-  
+
   // Ensure settings.json is synced from UIConfig.json
   if (!fs.existsSync(self.settingsFile)) {
     self.logger.info('[SpectrumWeb] Creating settings.json from UIConfig.json');
     self.syncSettingsFromUIConfig();
   }
-  
+
   return libQ.resolve();
 };
 
-SpectrumWeb.prototype.onStart = function() {
+SpectrumWeb.prototype.onStart = function () {
   var self = this;
   var defer = libQ.defer();
 
@@ -236,23 +236,23 @@ SpectrumWeb.prototype.onStart = function() {
   self.logger.info('[SpectrumWeb] Starting - HTTP:' + appPort + ', WS:' + wsPort);
 
   self.cleanupServers()
-    .then(function() {
+    .then(function () {
       return self.addMpdFifoConfig();
     })
-    .then(function() {
+    .then(function () {
       return self.initExpress(appPort);
     })
-    .then(function() {
+    .then(function () {
       return self.initWebSocket(wsPort);
     })
-    .then(function() {
+    .then(function () {
       return self.initFifoStream(fifoPath);
     })
-    .then(function() {
+    .then(function () {
       self.logger.info('[SpectrumWeb] Started successfully');
       defer.resolve();
     })
-    .fail(function(err) {
+    .fail(function (err) {
       self.logger.error('[SpectrumWeb] Start error:', err);
       defer.reject(err);
     });
@@ -260,21 +260,21 @@ SpectrumWeb.prototype.onStart = function() {
   return defer.promise;
 };
 
-SpectrumWeb.prototype.onStop = function() {
+SpectrumWeb.prototype.onStop = function () {
   var self = this;
   var defer = libQ.defer();
 
   self.logger.info('[SpectrumWeb] Stopping...');
-  
+
   self.cleanupServers()
-    .then(function() {
+    .then(function () {
       return self.removeMpdFifoConfig();
     })
-    .then(function() {
+    .then(function () {
       self.logger.info('[SpectrumWeb] Stopped');
       defer.resolve();
     })
-    .fail(function(err) {
+    .fail(function (err) {
       self.logger.error('[SpectrumWeb] Stop error:', err);
       defer.reject(err);
     });
@@ -285,7 +285,7 @@ SpectrumWeb.prototype.onStop = function() {
 /* ──────────────────────────────────────────────── *
  *  Get UI Configuration
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.getUIConfig = function() {
+SpectrumWeb.prototype.getUIConfig = function () {
   var self = this;
   var defer = libQ.defer();
 
@@ -296,97 +296,97 @@ SpectrumWeb.prototype.getUIConfig = function() {
     __dirname + '/i18n/strings_en.json',
     __dirname + '/UIConfig.json'
   )
-  .then(function(uiconf) {
-    
-    self.logger.info('[SpectrumWeb] Loading UI config from UIConfig.json');
+    .then(function (uiconf) {
 
-    // Load current UIConfig.json to get saved values
-    var savedUIConfig = self.loadUIConfig();
-    
-    if (savedUIConfig) {
-      // Find sections and merge saved values
-      uiconf.sections.forEach(function(section, sectionIndex) {
-        var savedSection = savedUIConfig.sections.find(function(s) { 
-          return s.id === section.id; 
-        });
-        
-        if (savedSection) {
-          section.content.forEach(function(item, itemIndex) {
-            var savedItem = savedSection.content.find(function(c) { 
-              return c.id === item.id; 
-            });
-            
-            if (savedItem && savedItem.value !== undefined) {
-              var destItem = uiconf.sections[sectionIndex].content[itemIndex];
-              var loadedVal = savedItem.value;
-              // If destination is not a select and saved value is an object wrapper, unwrap it
-              if (destItem && destItem.element !== 'select' && typeof loadedVal === 'object' && loadedVal.value !== undefined) {
-                loadedVal = loadedVal.value;
-              }
-              uiconf.sections[sectionIndex].content[itemIndex].value = loadedVal;
-              self.logger.info('[SpectrumWeb] Loaded ' + item.id + ' = ' + JSON.stringify(loadedVal));
-            }
+      self.logger.info('[SpectrumWeb] Loading UI config from UIConfig.json');
+
+      // Load current UIConfig.json to get saved values
+      var savedUIConfig = self.loadUIConfig();
+
+      if (savedUIConfig) {
+        // Find sections and merge saved values
+        uiconf.sections.forEach(function (section, sectionIndex) {
+          var savedSection = savedUIConfig.sections.find(function (s) {
+            return s.id === section.id;
           });
-        }
-      });
-    }
 
-    // Update general section with config.json values
-    var generalSection = uiconf.sections.find(function(s) { return s.id === 'general'; });
-    if (generalSection) {
-      // Read the plugin config file directly to obtain 'general' values.
-      // Support both new format { "general": { ... } } and legacy flat keys.
-      var pluginConfig = {};
-      try {
-        var configFilePath = self.commandRouter.pluginManager.getConfigurationFile(self.context, 'config.json');
-        if (fs.existsSync(configFilePath)) {
-          pluginConfig = fs.readJsonSync(configFilePath);
-        }
-      } catch (e) {
-        self.logger.warn('[SpectrumWeb] Could not read config.json:', e.message);
-      }
+          if (savedSection) {
+            section.content.forEach(function (item, itemIndex) {
+              var savedItem = savedSection.content.find(function (c) {
+                return c.id === item.id;
+              });
 
-      // Prefer nested general object, otherwise fall back to top-level keys
-      var gen = (pluginConfig && pluginConfig.general) ? pluginConfig.general : pluginConfig;
-
-      generalSection.content.forEach(function(item) {
-        if (item.id === 'appPort') {
-          item.value = (gen && gen.appPort !== undefined) ? gen.appPort : (self.config.get('appPort') || 8090);
-        } else if (item.id === 'wsPort') {
-          item.value = (gen && gen.wsPort !== undefined) ? gen.wsPort : (self.config.get('wsPort') || 9001);
-        } else if (item.id === 'fifoPath') {
-          item.value = (gen && gen.fifoPath !== undefined) ? gen.fifoPath : (self.config.get('fifoPath') || '/tmp/mpd.fifo');
-        } else if (item.id === 'kioskEnabled') {
-          item.value = (gen && gen.kioskEnabled !== undefined) ? gen.kioskEnabled : (self.config.get('kioskEnabled') || false);
-        } else if (item.id === 'kioskUrl') {
-          item.value = (gen && gen.kioskUrl !== undefined) ? gen.kioskUrl : (self.config.get('kioskUrl') || 'http://localhost:8090');
-        }
-      });
-    }
-
-    self.logger.info('[SpectrumWeb] UI config ready');
-    // Sanitize values: ensure non-select inputs have primitive values
-    try {
-      uiconf.sections.forEach(function(section) {
-        if (!section.content) return;
-        section.content.forEach(function(item) {
-          if (!item || item.value === undefined) return;
-          // For non-select elements, if value is an object wrapper {value,label}, unwrap it
-          if (item.element !== 'select' && typeof item.value === 'object' && item.value !== null && item.value.value !== undefined) {
-            item.value = item.value.value;
+              if (savedItem && savedItem.value !== undefined) {
+                var destItem = uiconf.sections[sectionIndex].content[itemIndex];
+                var loadedVal = savedItem.value;
+                // If destination is not a select and saved value is an object wrapper, unwrap it
+                if (destItem && destItem.element !== 'select' && typeof loadedVal === 'object' && loadedVal.value !== undefined) {
+                  loadedVal = loadedVal.value;
+                }
+                uiconf.sections[sectionIndex].content[itemIndex].value = loadedVal;
+                self.logger.info('[SpectrumWeb] Loaded ' + item.id + ' = ' + JSON.stringify(loadedVal));
+              }
+            });
           }
         });
-      });
-    } catch (e) {
-      self.logger.warn('[SpectrumWeb] UI config sanitization failed:', e.message);
-    }
+      }
 
-    defer.resolve(uiconf);
-  })
-  .fail(function(e) {
-    self.logger.error('[SpectrumWeb] getUIConfig failed:', e);
-    defer.reject(new Error());
-  });
+      // Update general section with config.json values
+      var generalSection = uiconf.sections.find(function (s) { return s.id === 'general'; });
+      if (generalSection) {
+        // Read the plugin config file directly to obtain 'general' values.
+        // Support both new format { "general": { ... } } and legacy flat keys.
+        var pluginConfig = {};
+        try {
+          var configFilePath = self.commandRouter.pluginManager.getConfigurationFile(self.context, 'config.json');
+          if (fs.existsSync(configFilePath)) {
+            pluginConfig = fs.readJsonSync(configFilePath);
+          }
+        } catch (e) {
+          self.logger.warn('[SpectrumWeb] Could not read config.json:', e.message);
+        }
+
+        // Prefer nested general object, otherwise fall back to top-level keys
+        var gen = (pluginConfig && pluginConfig.general) ? pluginConfig.general : pluginConfig;
+
+        generalSection.content.forEach(function (item) {
+          if (item.id === 'appPort') {
+            item.value = (gen && gen.appPort !== undefined) ? gen.appPort : (self.config.get('appPort') || 8090);
+          } else if (item.id === 'wsPort') {
+            item.value = (gen && gen.wsPort !== undefined) ? gen.wsPort : (self.config.get('wsPort') || 9001);
+          } else if (item.id === 'fifoPath') {
+            item.value = (gen && gen.fifoPath !== undefined) ? gen.fifoPath : (self.config.get('fifoPath') || '/tmp/mpd.fifo');
+          } else if (item.id === 'kioskEnabled') {
+            item.value = (gen && gen.kioskEnabled !== undefined) ? gen.kioskEnabled : (self.config.get('kioskEnabled') || false);
+          } else if (item.id === 'kioskUrl') {
+            item.value = (gen && gen.kioskUrl !== undefined) ? gen.kioskUrl : (self.config.get('kioskUrl') || 'http://localhost:8090');
+          }
+        });
+      }
+
+      self.logger.info('[SpectrumWeb] UI config ready');
+      // Sanitize values: ensure non-select inputs have primitive values
+      try {
+        uiconf.sections.forEach(function (section) {
+          if (!section.content) return;
+          section.content.forEach(function (item) {
+            if (!item || item.value === undefined) return;
+            // For non-select elements, if value is an object wrapper {value,label}, unwrap it
+            if (item.element !== 'select' && typeof item.value === 'object' && item.value !== null && item.value.value !== undefined) {
+              item.value = item.value.value;
+            }
+          });
+        });
+      } catch (e) {
+        self.logger.warn('[SpectrumWeb] UI config sanitization failed:', e.message);
+      }
+
+      defer.resolve(uiconf);
+    })
+    .fail(function (e) {
+      self.logger.error('[SpectrumWeb] getUIConfig failed:', e);
+      defer.reject(new Error());
+    });
 
   return defer.promise;
 };
@@ -394,7 +394,7 @@ SpectrumWeb.prototype.getUIConfig = function() {
 /* ──────────────────────────────────────────────── *
  *  Save General Config
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.saveGeneralConfig = function(data) {
+SpectrumWeb.prototype.saveGeneralConfig = function (data) {
   var self = this;
   var defer = libQ.defer();
 
@@ -437,7 +437,7 @@ SpectrumWeb.prototype.saveGeneralConfig = function(data) {
         currentConfig.general.kioskEnabled = kioskEnabled;
         self.config.set('kioskEnabled', kioskEnabled);
         self.logger.info('[SpectrumWeb] config.json.general: kioskEnabled = ' + kioskEnabled);
-        
+
         // Apply kiosk mode change
         if (kioskEnabled) {
           var appPort = self.config.get('appPort') || 8090;
@@ -452,7 +452,7 @@ SpectrumWeb.prototype.saveGeneralConfig = function(data) {
         currentConfig.general.kioskUrl = String(data.kioskUrl);
         self.config.set('kioskUrl', String(data.kioskUrl));
         self.logger.info('[SpectrumWeb] config.json.general: kioskUrl = ' + data.kioskUrl);
-        
+
         // If kiosk is enabled, restart with new URL
         if (self.config.get('kioskEnabled')) {
           self.enableKioskMode(String(data.kioskUrl));
@@ -473,9 +473,9 @@ SpectrumWeb.prototype.saveGeneralConfig = function(data) {
     // Also update UIConfig.json
     var uiconf = self.loadUIConfig();
     if (uiconf) {
-      var generalSection = uiconf.sections.find(function(s) { return s.id === 'general'; });
+      var generalSection = uiconf.sections.find(function (s) { return s.id === 'general'; });
       if (generalSection) {
-        generalSection.content.forEach(function(item) {
+        generalSection.content.forEach(function (item) {
           if (data[item.id] !== undefined) {
             var newVal = data[item.id];
             // If the UI sent an option object, unwrap it for input fields
@@ -508,7 +508,7 @@ SpectrumWeb.prototype.saveGeneralConfig = function(data) {
 /* ──────────────────────────────────────────────── *
  *  Save Analyzer Config
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.saveAnalyzerConfig = function(data) {
+SpectrumWeb.prototype.saveAnalyzerConfig = function (data) {
   var self = this;
   var defer = libQ.defer();
 
@@ -518,14 +518,14 @@ SpectrumWeb.prototype.saveAnalyzerConfig = function(data) {
   try {
     // Step 1: Update UIConfig.json with new values
     var updated = self.updateUIConfigValues(data);
-    
+
     if (!updated) {
       throw new Error('Failed to update UIConfig.json');
     }
 
     // Step 2: Extract all settings from UIConfig.json and save to settings.json
     var success = self.syncSettingsFromUIConfig();
-    
+
     if (!success) {
       throw new Error('Failed to sync settings.json');
     }
@@ -557,9 +557,9 @@ SpectrumWeb.prototype.saveAnalyzerConfig = function(data) {
 /* ──────────────────────────────────────────────── *
  *  Broadcast Settings Update
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.broadcastSettingsUpdate = function() {
+SpectrumWeb.prototype.broadcastSettingsUpdate = function () {
   var self = this;
-  
+
   if (!self.wss) {
     self.logger.warn('[SpectrumWeb] WebSocket not available for broadcast');
     return;
@@ -573,7 +573,7 @@ SpectrumWeb.prototype.broadcastSettingsUpdate = function() {
     });
 
     var count = 0;
-    self.wss.clients.forEach(function(client) {
+    self.wss.clients.forEach(function (client) {
       if (client.readyState === WebSocket.OPEN) {
         client.send(message);
         count++;
@@ -589,7 +589,7 @@ SpectrumWeb.prototype.broadcastSettingsUpdate = function() {
 /* ──────────────────────────────────────────────── *
  *  MPD FIFO Configuration
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.addMpdFifoConfig = function() {
+SpectrumWeb.prototype.addMpdFifoConfig = function () {
   var self = this;
   var defer = libQ.defer();
   var file = '/etc/mpd.conf';
@@ -617,21 +617,44 @@ SpectrumWeb.prototype.addMpdFifoConfig = function() {
       '}\n' +
       '# End SpectrumWeb FIFO\n';
 
-    fs.appendFileSync(file, appendText);
-    execSync('sudo systemctl restart mpd');
-    
-    self.logger.info('[SpectrumWeb] FIFO configured');
-    defer.resolve();
+    // var appendText = '\n# SpectrumWeb FIFO\n' +
+    //   'audio_output {\n' +
+    //   '    type "fifo"\n' +
+    //   '    name "spectrum_visualizer"\n' +
+    //   '    path "/tmp/mpd.fifo"\n' +
+    //   '    format "44100:16:2"\n' +
+    //   '    always_on "yes"\n' +
+    //   '}\n' +
+    //   'audio_output {\n' +
+    //   '   type            "httpd"\n' +
+    //   '   name            "localhost"\n' +
+    //   '   encoder         "lame"\n' +
+    //   '   port            "8001"\n' +
+    //   '   bitrate         "320"\n' +
+    //   '   format          "44100:16:2"\n' +
+    //   '   max_clients     "5" \n' +
+    //   '   buffer_time     "5000"\n' +
+    //   '   outburst_time   "2000"\n' +
+    //   '   always_on "yes"\n' +
+    //   '   tags "yes"\n' +
+    //   '   }\n' +
+    //   '# End SpectrumWeb FIFO\n';
 
-  } catch (e) {
-    self.logger.error('[SpectrumWeb] Add FIFO error:', e.message);
-    defer.reject(e);
-  }
+  fs.appendFileSync(file, appendText);
+  execSync('sudo systemctl restart mpd');
 
-  return defer.promise;
+  self.logger.info('[SpectrumWeb] FIFO configured');
+  defer.resolve();
+
+} catch (e) {
+  self.logger.error('[SpectrumWeb] Add FIFO error:', e.message);
+  defer.reject(e);
+}
+
+return defer.promise;
 };
 
-SpectrumWeb.prototype.removeMpdFifoConfig = function() {
+SpectrumWeb.prototype.removeMpdFifoConfig = function () {
   var self = this;
   var defer = libQ.defer();
   var file = '/etc/mpd.conf';
@@ -665,18 +688,18 @@ SpectrumWeb.prototype.removeMpdFifoConfig = function() {
 /* ──────────────────────────────────────────────── *
  *  Kiosk Mode Management
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.enableKioskMode = function(url) {
+SpectrumWeb.prototype.enableKioskMode = function (url) {
   var self = this;
-  
+
   try {
     var appPort = self.config.get('appPort') || 8090;
     url = url || self.config.get('kioskUrl') || ('http://localhost:' + appPort);
-    
+
     self.logger.info('[SpectrumWeb] Enabling kiosk mode with URL: ' + url);
-    
+
     // Stop any existing kiosk instance
     self.disableKioskMode();
-    
+
     // Update kiosk.sh with the correct URL
     var kioskShPath = path.join(__dirname, 'kiosk.sh');
     if (fs.existsSync(kioskShPath)) {
@@ -693,19 +716,19 @@ SpectrumWeb.prototype.enableKioskMode = function(url) {
         self.logger.error('[SpectrumWeb] Failed to update kiosk.sh:', err.message);
       }
     }
-    
+
     // Enable and start the service (should already exist from install.sh)
     execSync('sudo systemctl enable spectrum-kiosk.service');
     execSync('sudo systemctl start spectrum-kiosk.service');
-    
+
     self.logger.info('[SpectrumWeb] Kiosk mode enabled');
-    
+
     self.commandRouter.pushToastMessage(
       'success',
       'Spectrum Web',
       'Kiosk mode enabled. Display will show spectrum in fullscreen.'
     );
-    
+
   } catch (err) {
     self.logger.error('[SpectrumWeb] Enable kiosk error:', err);
     self.commandRouter.pushToastMessage(
@@ -716,41 +739,41 @@ SpectrumWeb.prototype.enableKioskMode = function(url) {
   }
 };
 
-SpectrumWeb.prototype.disableKioskMode = function() {
+SpectrumWeb.prototype.disableKioskMode = function () {
   var self = this;
-  
+
   try {
     self.logger.info('[SpectrumWeb] Disabling kiosk mode');
-    
+
     // Stop and disable the service
     try {
       execSync('sudo systemctl stop spectrum-kiosk.service');
     } catch (e) {
       // Service might not be running
     }
-    
+
     try {
       execSync('sudo systemctl disable spectrum-kiosk.service');
     } catch (e) {
       // Service might not be enabled
     }
-    
+
     self.logger.info('[SpectrumWeb] Kiosk mode disabled');
-    
+
     self.commandRouter.pushToastMessage(
       'success',
       'Spectrum Web',
       'Kiosk mode disabled'
     );
-    
+
   } catch (err) {
     self.logger.error('[SpectrumWeb] Disable kiosk error:', err);
   }
 };
 
-SpectrumWeb.prototype.getKioskStatus = function() {
+SpectrumWeb.prototype.getKioskStatus = function () {
   var self = this;
-  
+
   try {
     var isRunning = false;
     try {
@@ -759,7 +782,7 @@ SpectrumWeb.prototype.getKioskStatus = function() {
     } catch (e) {
       isRunning = false;
     }
-    
+
     var appPort = self.config.get('appPort') || 8090;
     return {
       enabled: self.config.get('kioskEnabled') || false,
@@ -780,18 +803,18 @@ SpectrumWeb.prototype.getKioskStatus = function() {
 /* ──────────────────────────────────────────────── *
  *  Cleanup Servers
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.cleanupServers = function() {
+SpectrumWeb.prototype.cleanupServers = function () {
   var self = this;
   var defer = libQ.defer();
 
-  var closeServer = function(server) {
-    return new Promise(function(resolve) {
+  var closeServer = function (server) {
+    return new Promise(function (resolve) {
       if (!server) {
         resolve();
         return;
       }
       try {
-        server.close(function() { resolve(); });
+        server.close(function () { resolve(); });
         setTimeout(resolve, 1000);
       } catch (e) {
         resolve();
@@ -800,31 +823,31 @@ SpectrumWeb.prototype.cleanupServers = function() {
   };
 
   Promise.resolve()
-    .then(function() {
+    .then(function () {
       if (self.wss) {
-        self.wss.clients.forEach(function(client) {
-          try { client.terminate(); } catch (e) {}
+        self.wss.clients.forEach(function (client) {
+          try { client.terminate(); } catch (e) { }
         });
         return closeServer(self.wss);
       }
     })
-    .then(function() {
+    .then(function () {
       self.wss = null;
       return closeServer(self.httpServer);
     })
-    .then(function() {
+    .then(function () {
       self.httpServer = null;
       if (self.fifoStream) {
-        try { self.fifoStream.destroy(); } catch (e) {}
+        try { self.fifoStream.destroy(); } catch (e) { }
         self.fifoStream = null;
       }
       if (self._fifoWatcher) {
-        try { self._fifoWatcher.close(); } catch (e) {}
+        try { self._fifoWatcher.close(); } catch (e) { }
         self._fifoWatcher = null;
       }
-      setTimeout(function() { defer.resolve(); }, 300);
+      setTimeout(function () { defer.resolve(); }, 300);
     })
-    .catch(function(err) {
+    .catch(function (err) {
       self.logger.error('[SpectrumWeb] Cleanup error:', err);
       defer.resolve();
     });
@@ -835,7 +858,7 @@ SpectrumWeb.prototype.cleanupServers = function() {
 /* ──────────────────────────────────────────────── *
  *  Initialize Express
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.initExpress = function(port) {
+SpectrumWeb.prototype.initExpress = function (port) {
   var self = this;
   var defer = libQ.defer();
 
@@ -845,9 +868,9 @@ SpectrumWeb.prototype.initExpress = function(port) {
 
     self.app = express();
     self.app.use(express.json());
-    
+
     // CORS
-    self.app.use(function(req, res, next) {
+    self.app.use(function (req, res, next) {
       res.header('Access-Control-Allow-Origin', '*');
       res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
       res.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -891,7 +914,7 @@ SpectrumWeb.prototype.initExpress = function(port) {
 
     // API endpoint to upload background files
     fs.ensureDirSync(backgroundsDir);
-    
+
     const storage = multer.diskStorage({
       destination: function (req, file, cb) {
         cb(null, backgroundsDir);
@@ -905,7 +928,7 @@ SpectrumWeb.prototype.initExpress = function(port) {
     const fileFilter = function (req, file, cb) {
       const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp4', 'webm', 'mkv', 'avi', 'mov'];
       const ext = path.extname(file.originalname).toLowerCase().slice(1);
-      
+
       if (allowedExts.includes(ext)) {
         cb(null, true);
       } else {
@@ -913,7 +936,7 @@ SpectrumWeb.prototype.initExpress = function(port) {
       }
     };
 
-    const upload = multer({ 
+    const upload = multer({
       storage: storage,
       fileFilter: fileFilter,
       limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
@@ -928,7 +951,7 @@ SpectrumWeb.prototype.initExpress = function(port) {
         const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
         const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov'];
         const ext = path.extname(req.file.filename).toLowerCase().slice(1);
-        
+
         let fileType = 'unknown';
         if (imageExts.includes(ext)) {
           fileType = 'image';
@@ -937,9 +960,9 @@ SpectrumWeb.prototype.initExpress = function(port) {
         }
 
         self.logger.info(`[SpectrumWeb] Background file uploaded: ${req.file.filename} (${fileType})`);
-        
-        res.json({ 
-          success: true, 
+
+        res.json({
+          success: true,
           filename: req.file.filename,
           type: fileType,
           size: req.file.size,
@@ -950,9 +973,9 @@ SpectrumWeb.prototype.initExpress = function(port) {
         res.status(500).json({ error: e.message });
       }
     });
-    
+
     // API: Get settings (from settings.json)
-    self.app.get('/api/settings', function(req, res) {
+    self.app.get('/api/settings', function (req, res) {
       try {
         var settings = self.loadSettings();
         res.json(settings);
@@ -962,18 +985,18 @@ SpectrumWeb.prototype.initExpress = function(port) {
     });
 
     // API: Update settings (saves to UIConfig.json → settings.json)
-    self.app.post('/api/settings', function(req, res) {
+    self.app.post('/api/settings', function (req, res) {
       try {
         // Update UIConfig.json
         var updated = self.updateUIConfigValues(req.body || {});
-        
+
         if (updated) {
           // Sync to settings.json
           self.syncSettingsFromUIConfig();
-          
+
           // Broadcast to clients
           self.broadcastSettingsUpdate();
-          
+
           res.json({ success: true });
         } else {
           res.status(500).json({ error: 'Failed to update settings' });
@@ -984,7 +1007,7 @@ SpectrumWeb.prototype.initExpress = function(port) {
     });
 
     // API: Get kiosk status
-    self.app.get('/api/kiosk/status', function(req, res) {
+    self.app.get('/api/kiosk/status', function (req, res) {
       try {
         var status = self.getKioskStatus();
         res.json(status);
@@ -994,7 +1017,7 @@ SpectrumWeb.prototype.initExpress = function(port) {
     });
 
     // API: Enable kiosk mode
-    self.app.post('/api/kiosk/enable', function(req, res) {
+    self.app.post('/api/kiosk/enable', function (req, res) {
       try {
         var appPort = self.config.get('appPort') || 8090;
         var url = req.body.url || self.config.get('kioskUrl') || ('http://localhost:' + appPort);
@@ -1006,7 +1029,7 @@ SpectrumWeb.prototype.initExpress = function(port) {
     });
 
     // API: Disable kiosk mode
-    self.app.post('/api/kiosk/disable', function(req, res) {
+    self.app.post('/api/kiosk/disable', function (req, res) {
       try {
         self.disableKioskMode();
         res.json({ success: true, message: 'Kiosk mode disabled' });
@@ -1018,13 +1041,13 @@ SpectrumWeb.prototype.initExpress = function(port) {
     self.app.use(express.static(uiDir));
 
     self.httpServer = http.createServer(self.app);
-    
-    self.httpServer.on('error', function(err) {
+
+    self.httpServer.on('error', function (err) {
       self.logger.error('[SpectrumWeb] HTTP error:', err);
       defer.reject(err);
     });
 
-    self.httpServer.listen(port, '0.0.0.0', function() {
+    self.httpServer.listen(port, '0.0.0.0', function () {
       self.logger.info('[SpectrumWeb] HTTP listening on port ' + port);
       self.logger.info('[SpectrumWeb] Settings API: GET/POST http://volumio.local:' + port + '/api/settings');
       defer.resolve();
@@ -1041,16 +1064,16 @@ SpectrumWeb.prototype.initExpress = function(port) {
 /* ──────────────────────────────────────────────── *
  *  Initialize WebSocket
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.initWebSocket = function(port) {
+SpectrumWeb.prototype.initWebSocket = function (port) {
   var self = this;
   var defer = libQ.defer();
 
   try {
     self.wss = new WebSocket.Server({ port: port });
 
-    self.wss.on('connection', function(ws) {
+    self.wss.on('connection', function (ws) {
       self.logger.info('[SpectrumWeb] WebSocket client connected');
-      
+
       // Send format
       ws.send(JSON.stringify({
         type: 'format',
@@ -1072,12 +1095,12 @@ SpectrumWeb.prototype.initWebSocket = function(port) {
       }
     });
 
-    self.wss.on('listening', function() {
+    self.wss.on('listening', function () {
       self.logger.info('[SpectrumWeb] WebSocket listening on port ' + port);
       defer.resolve();
     });
 
-    self.wss.on('error', function(err) {
+    self.wss.on('error', function (err) {
       self.logger.error('[SpectrumWeb] WebSocket error:', err);
       defer.reject(err);
     });
@@ -1093,34 +1116,34 @@ SpectrumWeb.prototype.initWebSocket = function(port) {
 /* ──────────────────────────────────────────────── *
  *  Initialize FIFO Stream
  * ──────────────────────────────────────────────── */
-SpectrumWeb.prototype.initFifoStream = function(fifoPath) {
+SpectrumWeb.prototype.initFifoStream = function (fifoPath) {
   var self = this;
   var defer = libQ.defer();
 
-  var broadcast = function(buffer) {
+  var broadcast = function (buffer) {
     if (!self.wss) return;
-    self.wss.clients.forEach(function(client) {
+    self.wss.clients.forEach(function (client) {
       if (client.readyState === WebSocket.OPEN) {
         client.send(buffer);
       }
     });
   };
 
-  var startStream = function() {
+  var startStream = function () {
     if (self.fifoStream || !fs.existsSync(fifoPath)) return;
 
     try {
       self.fifoStream = fs.createReadStream(fifoPath);
 
-      self.fifoStream.on('data', function(chunk) {
+      self.fifoStream.on('data', function (chunk) {
         broadcast(chunk);
       });
 
-      self.fifoStream.on('end', function() {
+      self.fifoStream.on('end', function () {
         restartStream('end');
       });
 
-      self.fifoStream.on('error', function(err) {
+      self.fifoStream.on('error', function (err) {
         restartStream('error', err.message);
       });
 
@@ -1130,11 +1153,11 @@ SpectrumWeb.prototype.initFifoStream = function(fifoPath) {
     }
   };
 
-  var restartStream = function(reason, msg) {
+  var restartStream = function (reason, msg) {
     self.logger.warn('[SpectrumWeb] FIFO ' + reason + ' - restarting...', msg || '');
-    try { 
-      if (self.fifoStream) self.fifoStream.destroy(); 
-    } catch (e) {}
+    try {
+      if (self.fifoStream) self.fifoStream.destroy();
+    } catch (e) { }
     self.fifoStream = null;
     setTimeout(startStream, 2000);
   };
@@ -1143,7 +1166,7 @@ SpectrumWeb.prototype.initFifoStream = function(fifoPath) {
 
   var dir = path.dirname(fifoPath);
   try {
-    self._fifoWatcher = fs.watch(dir, function(event, filename) {
+    self._fifoWatcher = fs.watch(dir, function (event, filename) {
       if (filename === path.basename(fifoPath) && fs.existsSync(fifoPath)) {
         startStream();
       }
