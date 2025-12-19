@@ -41,41 +41,37 @@ if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "amd64" ]]; then
   echo "Using AMD64/x86_64 optimized flags for high FPS"
   /usr/bin/chromium \
     --kiosk \
-    --window-position=0,0 \
-    --no-first-run \
-    --no-sandbox \
-    --user-data-dir='/data/volumiokiosk' \
-    --autoplay-policy=no-user-gesture-required \
-    --disable-session-crashed-bubble \
-    --disable-infobars \
-    --disable-sync \
-    --disable-translate \
-    --disable-background-networking \
-    --disable-quic \
-    --disable-software-rasterizer \
-    --enable-features=VaapiVideoDecoder,CanvasOopRasterization \
-    --disable-features=UseChromeOSDirectVideoDecoder \
-    --enable-gpu-rasterization \
-    --enable-oop-rasterization \
-    --enable-zero-copy \
-    --enable-native-gpu-memory-buffers \
-    --enable-accelerated-video-decode \
-    --enable-accelerated-2d-canvas \
-    --ignore-gpu-blocklist \
-    --disable-gpu-driver-bug-workarounds \
-    --enable-hardware-overlays \
-    --max-gum-fps=60 \
-    --use-gl=desktop \
-    --num-raster-threads=4 \
-    --enable-fast-unload \
-    --enable-tcp-fast-open \
-    --password-store=basic \
     --touch-events \
     --disable-touch-drag-drop \
     --disable-overlay-scrollbar \
     --enable-touchview \
     --enable-pinch \
+    --window-position=0,0 \
+    --disable-session-crashed-bubble \
+    --disable-infobars \
+    --disable-sync \
+    --no-first-run \
+    --no-sandbox \
+    --user-data-dir='/data/volumiokiosk' \
+    --disable-translate \
+    --show-component-extension-options \
+    --disable-background-networking \
+    --enable-remote-extensions \
+    --disable-quic \
+    --password-store=basic \
+    --enable-fast-unload \
+    --enable-tcp-fast-open \
+    --autoplay-policy=no-user-gesture-required \
     --load-extension='/data/volumiokioskextensions/VirtualKeyboard/' \
+    --ignore-gpu-blacklist \
+    --enable-gpu-rasterization \
+    --enable-zero-copy \
+    --num-raster-threads=2 \
+    --disable-gpu-vsync \
+    --disable-features=UseChromeOSDirectVideoDecoder \
+    --enable-features=VaapiVideoDecoder,CanvasOopRasterization \
+    --disable-smooth-scrolling \
+    --disable-software-rasterizer \
     http://localhost:8090
 
 elif [[ "${ARCH}" == "armv7l" || "${ARCH}" == "aarch64" || "${ARCH}" == "arm64" ]]; then
