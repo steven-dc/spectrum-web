@@ -930,13 +930,29 @@ function setupEventListeners() {
         if (audioMotion) audioMotion.peakHoldTime = parseInt(this.value);
     });
 
+    // Peak Visibility Toggles
+    const peakToggles = ['showPeaks', 'peakLine'];
+    peakToggles.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('click', function () {
+                const wasActive = this.dataset.active === '1';
+                const nowActive = !wasActive;
+                this.dataset.active = nowActive ? '1' : '0';
+                if (audioMotion) {
+                    audioMotion[id] = nowActive;
+                }
+            });
+        }
+    });
+
     // Display
     addListener("showFPS", "click", function () {
         const wasActive = this.dataset.active === '1';
         const nowActive = !wasActive;
         this.dataset.active = nowActive ? '1' : '0';
         if (audioMotion) audioMotion.showFPS = nowActive;
-        ensureFpsCounterTimer();
+        // ensureFpsCounterTimer();
     });
 
     addListener("loRes", "click", function () {
@@ -1114,6 +1130,9 @@ function getCurrentSettings() {
         ansiBands: getSelectedRadio('ansiBandsSelect') || '0',
         linearAmplitude: getSelectedRadio('linearAmplitudeSelect') || '1',
         weightingFilter: document.getElementById('weightingFilter')?.value || '',
+        // Peak options
+        showPeaks: document.getElementById('showPeaks')?.dataset.active === '1',
+        peakLine: document.getElementById('peakLine')?.dataset.active === '1',
         gravity: parseFloat(document.getElementById('gravity')?.value || 3.8),
         peakFade: parseInt(document.getElementById('peakFade')?.value || 750),
         peakHold: parseInt(document.getElementById('peakHold')?.value || 500),
@@ -1372,6 +1391,18 @@ function applyPreset(preset) {
         }
     }
 
+    // Peak visibility
+    if (preset.showPeaks !== undefined) {
+        audioMotion.showPeaks = !!preset.showPeaks;
+        const el = document.getElementById('showPeaks');
+        if (el) el.dataset.active = preset.showPeaks ? '1' : '0';
+    }
+    if (preset.peakLine !== undefined) {
+        audioMotion.peakLine = !!preset.peakLine;
+        const el = document.getElementById('peakLine');
+        if (el) el.dataset.active = preset.peakLine ? '1' : '0';
+    }
+
     // if (preset.maxFPS !== undefined) {
     //     audioMotion.maxFPS = preset.maxFPS;
     //     const maxFPSSelect = document.getElementById('maxFPS');
@@ -1382,7 +1413,7 @@ function applyPreset(preset) {
         audioMotion.showFPS = preset.showFPS;
         const showFPSEl = document.getElementById('showFPS');
         if (showFPSEl) showFPSEl.dataset.active = preset.showFPS ? '1' : '0';
-        ensureFpsCounterTimer();
+        // ensureFpsCounterTimer();
     }
 
     if (preset.loRes !== undefined) {
@@ -1966,7 +1997,7 @@ function toggleBrowse() {
     }
 }
 
-async function browseMusicLibrary(uri = null) {
+async function browseMusicLibrary(uri = null, suppressHistory = false) {
     try {
         const volumioUrl = getVolumioUrl();
         let url = `${volumioUrl}/api/v1/browse`;
@@ -1982,8 +2013,8 @@ async function browseMusicLibrary(uri = null) {
         const data = await response.json();
         console.log('[Browse] Response:', data);
 
-        // Update history
-        if (uri) {
+        // Update history only for forward navigation
+        if (uri && !suppressHistory) {
             browseHistory.push(currentBrowsePath);
         }
         currentBrowsePath = { uri: uri, title: data.title || 'Music Library' };
@@ -2209,8 +2240,8 @@ async function addBrowseItemToPlaylist(item) {
 function browseGoBack() {
     if (browseHistory.length > 0) {
         const previousPath = browseHistory.pop();
-        currentBrowsePath = previousPath;
-        browseMusicLibrary(previousPath?.uri);
+        // Navigate back without pushing current path again
+        browseMusicLibrary(previousPath?.uri || null, true);
     }
 }
 
@@ -2672,18 +2703,18 @@ function updateFPS() {
 }
 
 // Ensure FPS timer and UI reflect current setting
-function ensureFpsCounterTimer() {
-    const showFpsActive = document.getElementById('showFPS')?.dataset.active === '1';
-    const counter = document.getElementById('fpsCounter');
-    if (counter) counter.style.display = showFpsActive ? '' : 'none';
+// function ensureFpsCounterTimer() {
+//     const showFpsActive = document.getElementById('showFPS')?.dataset.active === '1';
+//     const counter = document.getElementById('fpsCounter');
+//     if (counter) counter.style.display = showFpsActive ? '' : 'none';
 
-    if (showFpsActive && !fpsInterval) {
-        fpsInterval = setInterval(updateFPS, 1000);
-    } else if (!showFpsActive && fpsInterval) {
-        clearInterval(fpsInterval);
-        fpsInterval = null;
-    }
-}
+//     if (showFpsActive && !fpsInterval) {
+//         fpsInterval = setInterval(updateFPS, 1000);
+//     } else if (!showFpsActive && fpsInterval) {
+//         clearInterval(fpsInterval);
+//         fpsInterval = null;
+//     }
+// }
 
 // Apply low-resolution rendering hint to canvas and analyzer
 function applyLoRes(active) {
@@ -2817,9 +2848,10 @@ async function initAudioMotion() {
         // Only connect WebSocket if it's the current audio source
         if (currentAudioSource === 'websocket') {
             connectWebSocket();
+            setInterval(updateFPS, 1000);
         }
         
-        ensureFpsCounterTimer();
+        // ensureFpsCounterTimer();
 
     } catch (e) {
         console.error('[AM] Init error:', e);
@@ -3277,8 +3309,27 @@ function syncUIWithSettings(settings) {
         if (settings.showFPS !== undefined) {
             const el = document.getElementById('showFPS');
             if (el) el.dataset.active = settings.showFPS ? '1' : '0';
-            ensureFpsCounterTimer();
+            // ensureFpsCounterTimer();
         }
+
+        // Show Peaks
+        if (settings.showPeaks !== undefined) {
+            const el = document.getElementById('showPeaks');
+            if (el) el.dataset.active = settings.showPeaks ? '1' : '0';
+        }
+
+        // peakLines
+        if (settings.peakLines !== undefined) {
+            const el = document.getElementById('peakLines');
+            if (el) el.dataset.active = settings.peakLines ? '1' : '0';
+        }
+
+        // // Show Background Color
+        // if (settings.showBgColor !== undefined) {
+        //     const el = document.getElementById('showBgColor');
+        //     if (el) el.dataset.active = settings.showBgColor ? '1' : '0';
+        // }
+
 
         // Lo Res
         if (settings.loRes !== undefined) {

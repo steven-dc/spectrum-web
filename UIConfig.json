@@ -222,8 +222,8 @@
           "label": "TRANSLATE.SPECTRUM_WEB.FFT_SIZE",
           "doc": "Higher values = better frequency resolution but more CPU usage",
           "value": {
-            "value": 8192,
-            "label": "8192"
+            "value": 4096,
+            "label": "4096"
           },
           "options": [
             {
@@ -876,7 +876,7 @@
           "id": "showControlBar",
           "element": "switch",
           "label": "TRANSLATE.SPECTRUM_WEB.SHOW_CONTROL_BAR",
-          "value": false
+          "value": true
         },
         {
           "id": "showNowPlaying",
@@ -906,7 +906,7 @@
           "type": "text",
           "label": "TRANSLATE.SPECTRUM_WEB.NP_W",
           "doc": "Now Playing width in pixels",
-          "value": 320
+          "value": 701
         },
         {
           "id": "npH",
@@ -914,7 +914,7 @@
           "type": "text",
           "label": "TRANSLATE.SPECTRUM_WEB.NP_H",
           "doc": "Now Playing height (auto or pixels)",
-          "value": "100"
+          "value": "120"
         },
         {
           "id": "volume",
