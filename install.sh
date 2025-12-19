@@ -1,43 +1,43 @@
 #!/bin/bash
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "=========================================="
 echo "  Installing Spectrum Web Plugin"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "=========================================="
 
 PLUGIN_DIR="/data/plugins/user_interface/spectrum-web"
 CONFIG_DIR="/data/configuration/user_interface/spectrum-web"
 
 echo ""
-echo "📦 Installing Node.js dependencies..."
+echo "Installing Node.js dependencies..."
 cd "$PLUGIN_DIR"
 npm install --production --no-optional
 
 echo ""
-echo "📁 Creating configuration directory..."
+echo "Creating configuration directory..."
 mkdir -p "$CONFIG_DIR"
 
 echo ""
-echo "📝 Copying default configuration..."
+echo "Copying default configuration..."
 if [ ! -f "$CONFIG_DIR/config.json" ]; then
     cp "$PLUGIN_DIR/config.json" "$CONFIG_DIR/config.json"
-    echo "✓ Default config.json created"
+    echo "[OK] Default config.json created"
 else
-    echo "ℹ Config file already exists, keeping current settings"
+    echo "[INFO] Config file already exists, keeping current settings"
 fi
 
 echo ""
-echo "🎨 Creating UI directories..."
+echo "Creating UI directories..."
 mkdir -p "$PLUGIN_DIR/ui/backgrounds"
 
 
 echo ""
-echo "🔑 Setting permissions..."
-#chown -R volumio:volumio "$CONFIG_DIR"
-#chown -R volumio:volumio "$PLUGIN_DIR/ui"
+echo "Setting permissions..."
+chown -R volumio:volumio "$CONFIG_DIR"
+chown -R volumio:volumio "$PLUGIN_DIR/ui"
 chmod -R 755 "$PLUGIN_DIR/ui"
 
 echo ""
-echo "🔧 Configuring MPD FIFO..."
+echo "Configuring MPD FIFO..."
 if ! grep -q "# SpectrumWeb FIFO" /etc/mpd.conf; then
     cat >> /etc/mpd.conf << 'EOF'
 
@@ -51,19 +51,47 @@ audio_output {
 }
 # End SpectrumWeb FIFO
 EOF
-    echo "✓ MPD FIFO configured"
+    echo "[OK] MPD FIFO configured"
     systemctl restart mpd
 else
-    echo "ℹ MPD FIFO already configured"
+    echo "[INFO] MPD FIFO already configured"
 fi
 
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ Spectrum Web installed successfully!"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Creating systemd service for kiosk mode..."
+cat > /tmp/spectrum-kiosk.service << 'EOF'
+[Unit]
+Description=Spectrum Web Kiosk Mode
+After=volumio.service
+Wants=volumio.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/startx /etc/X11/Xsession /data/plugins/user_interface/spectrum-web/kiosk.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+if [ -f /tmp/spectrum-kiosk.service ]; then
+    cp /tmp/spectrum-kiosk.service /etc/systemd/system/
+    systemctl daemon-reload
+    echo "[OK] Kiosk service created (disabled by default)"
+else
+    echo "[WARNING] Failed to create kiosk service"
+fi
+
 echo ""
-echo "📍 Configuration file: $CONFIG_DIR/config.json"
-echo "🌐 After enabling the plugin, access visualizer at:"
+echo "=========================================="
+echo "[SUCCESS] Spectrum Web installed successfully!"
+echo "=========================================="
+echo ""
+echo "[INFO] Configuration file: $CONFIG_DIR/config.json"
+echo "[INFO] After enabling the plugin, access visualizer at:"
 echo "   http://volumio.local:8090"
 echo ""
 
