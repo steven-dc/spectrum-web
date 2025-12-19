@@ -563,7 +563,7 @@
           "id": "showScaleY",
           "element": "switch",
           "label": "TRANSLATE.SPECTRUM_WEB.SHOW_SCALE_Y",
-          "value": true
+          "value": false
         },
         {
           "id": "showFPS",
@@ -735,7 +735,7 @@
           "type": "text",
           "label": "TRANSLATE.SPECTRUM_WEB.BG_FILE",
           "doc": "Path or URL to background file",
-          "value": ""
+          "value": "aurora.svg"
         },
         {
           "id": "bgFit",
@@ -786,7 +786,7 @@
           "id": "scaleY",
           "element": "switch",
           "label": "TRANSLATE.SPECTRUM_WEB.SCALE_Y",
-          "value": "1"
+          "value": "0"
         },
         {
           "id": "freqScale",
@@ -902,7 +902,7 @@
           "type": "text",
           "label": "TRANSLATE.SPECTRUM_WEB.NP_W",
           "doc": "Now Playing width in pixels",
-          "value": 600
+          "value": 688
         },
         {
           "id": "npH",
@@ -910,7 +910,7 @@
           "type": "text",
           "label": "TRANSLATE.SPECTRUM_WEB.NP_H",
           "doc": "Now Playing height (auto or pixels)",
-          "value": "auto"
+          "value": "126"
         },
         {
           "id": "volume",

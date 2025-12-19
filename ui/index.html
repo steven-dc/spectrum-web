@@ -76,7 +76,9 @@
             <div class="panel-title" id="browseTitle">🎶 Music Library</div>
             <div class="close-btn" onclick="toggleBrowse()">×</div>
         </div>
-        <div id="browsePath" style="padding: 8px 12px; background: #1a1e25; font-size: 12px; color: #8b9dc3; border-bottom: 1px solid #2a2e35;"></div>
+        <div id="browsePath"
+            style="padding: 8px 12px; background: #1a1e25; font-size: 12px; color: #8b9dc3; border-bottom: 1px solid #2a2e35;">
+        </div>
         <div id="browseList"></div>
     </div>
     <!-- Settings Panel -->
@@ -173,20 +175,7 @@
                 </label>
                 <input id="lineWidth" type="range" min="0" max="3" step="0.5" value="0">
             </div>
-            <!-- Radial Settings -->
-            <div class="settings-group">
-                <h2>⭕ Radial Settings</h2>
 
-                <label>
-                    Radius: <span class="value-display" id="radiusValue">0.30</span>
-                </label>
-                <input id="radius" type="range" min="0" max="1" step="0.05" value="0.3">
-
-                <label>
-                    Spin Speed: <span class="value-display" id="spinSpeedValue">0 RPM</span>
-                </label>
-                <input id="spinSpeed" type="range" min="-10" max="10" step="1" value="0">
-            </div>
 
             <!-- Sensitivity -->
             <div class="settings-group">
@@ -214,6 +203,20 @@
                 </div>
             </div>
 
+            <!-- Radial Settings -->
+            <div class="settings-group">
+                <h2>⭕ Radial Settings</h2>
+
+                <label>
+                    Radius: <span class="value-display" id="radiusValue">0.30</span>
+                </label>
+                <input id="radius" type="range" min="0" max="1" step="0.05" value="0.3">
+
+                <label>
+                    Spin Speed: <span class="value-display" id="spinSpeedValue">0 RPM</span>
+                </label>
+                <input id="spinSpeed" type="range" min="-10" max="10" step="1" value="0">
+            </div>
             <!-- Reflex -->
             <div class="settings-group">
                 <h2>🔄 Reflex</h2>
@@ -397,7 +400,7 @@
 
                 <label><input type="checkbox" id="autoHide"> Auto-hide panel on hover</label>
             </div> -->
-            
+
             <!-- Audio Source Settings -->
             <!-- <div class="settings-group">
                 <h2>🎧 Audio Source</h2>
@@ -448,16 +451,18 @@
 
                 <div style="display: flex; gap: 8px; margin-top: 12px;">
                     <button class="secondary" onclick="refreshBackgroundFiles()" style="flex: 1;">🔄 Refresh</button>
-                    <button class="secondary" onclick="document.getElementById('bgUploadInput').click()" style="flex: 1;">📤 Upload</button>
+                    <button class="secondary" onclick="document.getElementById('bgUploadInput').click()"
+                        style="flex: 1;">📤 Upload</button>
                 </div>
-                <input type="file" id="bgUploadInput" accept="image/*,video/*" style="display: none;" onchange="uploadBackground(this)">
+                <input type="file" id="bgUploadInput" accept="image/*,video/*" style="display: none;"
+                    onchange="uploadBackground(this)">
                 <div id="uploadStatus" style="font-size: 12px; color: #8b9dc3; margin-top: 8px; display: none;"></div>
             </div>
 
             <!-- Audio Source Settings -->
             <div class="settings-group">
                 <h2>🎧 Audio Source</h2>
-                
+
                 <label>Audio Input Source</label>
                 <select id="audioSource">
                     <option value="websocket">WebSocket (Default)</option>
@@ -465,13 +470,15 @@
                 </select>
 
                 <label id="mpdUrlLabel" style="display: none; margin-top: 12px;">MPD HTTP URL</label>
-                <input id="mpdUrl" type="text" placeholder="http://192.168.1.63:8001" value="http://192.168.1.63:8001" style="display: none;">
+                <input id="mpdUrl" type="text" placeholder="http://192.168.1.63:8001" value="http://192.168.1.63:8001"
+                    style="display: none;">
 
                 <div style="margin-top: 12px;">
                     <button id="applyAudioSourceBtn" class="secondary">Apply Audio Source</button>
                 </div>
-                
-                <div id="audioSourceStatus" style="font-size: 12px; color: #8b9dc3; margin-top: 8px; display: none;"></div>
+
+                <div id="audioSourceStatus" style="font-size: 12px; color: #8b9dc3; margin-top: 8px; display: none;">
+                </div>
             </div>
 
             <div class="settings-group">

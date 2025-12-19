@@ -19,12 +19,20 @@ Spectrum Web is a user interface plugin for Volumio that provides a real-time au
 - 🌐 **WebSocket Integration** - Low-latency real-time audio data streaming
 - 🖥️ **Kiosk Mode** - Full-screen mode for dedicated displays
 
+## 🎥 Demo
+
+Below are a few screenshots from the analyzer, taken with different effects:
+
+| LED Bars | Outline | Radial |
+|---|---|---|
+| ![LED Bars](img/led.png) | ![Outline](img/outline.png) | ![Radial](img/radian.png) |
+
 ## 🚀 Installation
 
 ### System Requirements
 
-- Volumio  3.x
-- CPU x64
+- Volumio 3.x
+- CPU x86_64
 - ARM (not tested)
 
 

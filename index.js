@@ -881,7 +881,7 @@ SpectrumWeb.prototype.initExpress = function (port) {
     self.app.get('/api/backgrounds', (req, res) => {
       try {
         const result = { images: [], videos: [] };
-        const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+        const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
         const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov'];
 
         if (!fs.existsSync(backgroundsDir)) {
@@ -926,7 +926,7 @@ SpectrumWeb.prototype.initExpress = function (port) {
     });
 
     const fileFilter = function (req, file, cb) {
-      const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'mp4', 'webm', 'mkv', 'avi', 'mov'];
+      const allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'mp4', 'webm', 'mkv', 'avi', 'mov'];
       const ext = path.extname(file.originalname).toLowerCase().slice(1);
 
       if (allowedExts.includes(ext)) {

@@ -6,21 +6,6 @@ echo "Starting Kiosk"
 start=$(date +%s)
 
 export DISPLAY=:0
-# in case we want to cap hires monitors (e.g. 4K) to HD (1920x1080)
-#CAPPEDRES="1920x1080"
-#SUPPORTEDRES=""
-#if [ -z "" ]; then
-#  echo "Resolution  not found, skipping"
-#else
-#  echo "Capping resolution to "
-#  xrandr -s ""
-#fi
-
-#TODO xpdyinfo does not work on a fresh install (freezes), skipping it just now
-#Perhaps xrandr can be parsed instead? (Needs DISPLAY:=0 to be exported first)
-#res=$(xdpyinfo | awk '/dimensions:/ { print $2; exit }')
-#res=${res/x/,}
-#echo "Current probed resolution: ${res}"
 
 xset -dpms
 xset s off
@@ -44,37 +29,107 @@ fi
 while true; do timeout 5 bash -c "</dev/tcp/127.0.0.1/3000" >/dev/null 2>&1 && break; done
 echo "Waited $(($(date +%s) - start)) sec for Volumio UI"
 
+# Detect CPU architecture
+ARCH=$(uname -m)
+echo "Detected CPU architecture: ${ARCH}"
+
 # Start Openbox
 openbox-session &
+
+# Configure Chromium flags based on CPU architecture for optimal spectrum FPS
+if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "amd64" ]]; then
+  echo "Using AMD64/x86_64 optimized flags for high FPS"
   /usr/bin/chromium \
     --kiosk \
+    --window-position=0,0 \
+    --no-first-run \
+    --no-sandbox \
+    --user-data-dir='/data/volumiokiosk' \
+    --autoplay-policy=no-user-gesture-required \
+    --disable-session-crashed-bubble \
+    --disable-infobars \
+    --disable-sync \
+    --disable-translate \
+    --disable-background-networking \
+    --disable-quic \
+    --disable-software-rasterizer \
+    --enable-features=VaapiVideoDecoder,CanvasOopRasterization \
+    --disable-features=UseChromeOSDirectVideoDecoder \
+    --enable-gpu-rasterization \
+    --enable-oop-rasterization \
+    --enable-zero-copy \
+    --enable-native-gpu-memory-buffers \
+    --enable-accelerated-video-decode \
+    --enable-accelerated-2d-canvas \
+    --ignore-gpu-blocklist \
+    --disable-gpu-driver-bug-workarounds \
+    --enable-hardware-overlays \
+    --max-gum-fps=60 \
+    --use-gl=desktop \
+    --num-raster-threads=4 \
+    --enable-fast-unload \
+    --enable-tcp-fast-open \
+    --password-store=basic \
     --touch-events \
     --disable-touch-drag-drop \
     --disable-overlay-scrollbar \
     --enable-touchview \
     --enable-pinch \
+    --load-extension='/data/volumiokioskextensions/VirtualKeyboard/' \
+    http://localhost:8090
+
+elif [[ "${ARCH}" == "armv7l" || "${ARCH}" == "aarch64" || "${ARCH}" == "arm64" ]]; then
+  echo "Using ARM optimized flags for high FPS"
+  /usr/bin/chromium \
+    --kiosk \
     --window-position=0,0 \
-    --disable-session-crashed-bubble \
-    --disable-infobars \
-    --disable-sync \
     --no-first-run \
     --no-sandbox \
     --user-data-dir='/data/volumiokiosk' \
+    --autoplay-policy=no-user-gesture-required \
+    --disable-session-crashed-bubble \
+    --disable-infobars \
+    --disable-sync \
     --disable-translate \
-    --show-component-extension-options \
     --disable-background-networking \
-    --enable-remote-extensions \
-    --enable-native-gpu-memory-buffers \
     --disable-quic \
-    --password-store=basic \
+    --disable-software-rasterizer \
+    --disable-gpu-compositing \
+    --enable-features=CanvasOopRasterization \
+    --enable-gpu-rasterization \
+    --enable-zero-copy \
+    --enable-native-gpu-memory-buffers \
+    --ignore-gpu-blocklist \
+    --use-gl=egl \
+    --max-gum-fps=60 \
+    --num-raster-threads=2 \
     --enable-fast-unload \
     --enable-tcp-fast-open \
-    --autoplay-policy=no-user-gesture-required \
+    --password-store=basic \
+    --disable-dev-shm-usage \
+    --disable-accelerated-2d-canvas \
+    --touch-events \
+    --disable-touch-drag-drop \
+    --disable-overlay-scrollbar \
+    --enable-touchview \
+    --enable-pinch \
     --load-extension='/data/volumiokioskextensions/VirtualKeyboard/' \
-    --ignore-gpu-blacklist \
-    --use-gl=desktop \
-    --disable-gpu-compositing \
-    --force-gpu-rasterization \
-    --enable-zero-copy \
     http://localhost:8090
 
+else
+  echo "Unknown architecture, using default flags"
+  /usr/bin/chromium \
+    --kiosk \
+    --window-position=0,0 \
+    --no-first-run \
+    --no-sandbox \
+    --user-data-dir='/data/volumiokiosk' \
+    --autoplay-policy=no-user-gesture-required \
+    --touch-events \
+    --disable-touch-drag-drop \
+    --disable-overlay-scrollbar \
+    --enable-touchview \
+    --enable-pinch \
+    --load-extension='/data/volumiokioskextensions/VirtualKeyboard/' \
+    http://localhost:8090
+fi
