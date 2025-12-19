@@ -1,7 +1,22 @@
 {
-  "appPort": 8090,
-  "wsPort": 9001,
-  "fifoPath": "/tmp/mpd.fifo",
-  "kioskEnabled": false,
-  "kioskUrl": "http://localhost:8090"
+  "kioskEnabled": {
+    "type": "boolean",
+    "value": false
+  },
+  "kioskUrl": {
+      "type": "string",
+      "value": "http://localhost:8090"
+  },
+  "fifoPath": {
+    "type": "string",
+    "value": "/tmp/mpd.fifo"
+  },
+  "appPort": {
+    "type": "integer",
+    "value": 8090
+  },
+    "wsPort": {
+    "type": "integer",
+    "value": 9001
+  }
 }
