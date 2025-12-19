@@ -210,7 +210,7 @@ netstat -tuln | grep 9001
 
 ## 📝 License
 
-MIT License - Copyright (c) 2025 CuongDao
+MIT License 
 
 ## 👤 Author
 
