@@ -24,9 +24,7 @@
 
     <!-- Now Playing -->
     <div id="nowPlaying" class="hidden">
-        <div class="resize-handle resize-tl"></div>
-        <div class="resize-handle resize-tr"></div>
-        <div class="resize-handle resize-bl"></div>
+
         <div class="resize-handle resize-br"></div>
         <div class="player-container">
             <div class="track-art">
@@ -188,6 +186,13 @@
                     <input type="radio" name="sensitivity" value="2" id="sens-high">
                     <label for="sens-high">High</label>
                 </form>
+                <label style="margin-top: 12px;">
+                    Decibels Range: <span class="value-display" id="DecibelsValue">Default min -85, max -25</span>
+                </label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+                    <input id="minDecibels" type="number" placeholder="Min (db)" value="-85" style="margin: 0;">
+                    <input id="maxDecibels" type="number" placeholder="Max (db)" value="-25" style="margin: 0;">
+                </div>
             </div>
 
             <!-- Effects -->
@@ -305,6 +310,8 @@
                     <input id="maxFreq" type="number" placeholder="Max (Hz)" value="22000" style="margin: 0;">
                 </div>
             </div>
+
+
 
             <!-- FFT Settings -->
             <div class="settings-group">

@@ -289,7 +289,7 @@
           "type": "number",
           "label": "TRANSLATE.SPECTRUM_WEB.MAX_FREQ",
           "doc": "Maximum frequency in Hz",
-          "value": 22000
+          "value": 20000
         },
         {
           "id": "minDecibels",
@@ -569,7 +569,7 @@
           "id": "showFPS",
           "element": "switch",
           "label": "TRANSLATE.SPECTRUM_WEB.SHOW_FPS",
-          "value": true
+          "value": false
         },
         {
           "id": "performance_header",
@@ -711,8 +711,8 @@
           "element": "select",
           "label": "TRANSLATE.SPECTRUM_WEB.BG_TYPE",
           "value": {
-            "value": "none",
-            "label": "None"
+            "value": "file",
+            "label": "File"
           },
           "options": [
             {
@@ -722,6 +722,10 @@
             {
               "value": "image",
               "label": "Image"
+            },
+            {
+              "value": "file",
+              "label": "File"
             },
             {
               "value": "color",
@@ -872,7 +876,7 @@
           "id": "showControlBar",
           "element": "switch",
           "label": "TRANSLATE.SPECTRUM_WEB.SHOW_CONTROL_BAR",
-          "value": true
+          "value": false
         },
         {
           "id": "showNowPlaying",
@@ -886,7 +890,7 @@
           "type": "number",
           "label": "TRANSLATE.SPECTRUM_WEB.NP_X",
           "doc": "Now Playing X position in pixels",
-          "value": 16
+          "value": 9
         },
         {
           "id": "npY",
@@ -894,7 +898,7 @@
           "type": "number",
           "label": "TRANSLATE.SPECTRUM_WEB.NP_Y",
           "doc": "Now Playing Y position in pixels",
-          "value": 16
+          "value": 7
         },
         {
           "id": "npW",
@@ -902,7 +906,7 @@
           "type": "text",
           "label": "TRANSLATE.SPECTRUM_WEB.NP_W",
           "doc": "Now Playing width in pixels",
-          "value": 688
+          "value": 320
         },
         {
           "id": "npH",
@@ -910,7 +914,7 @@
           "type": "text",
           "label": "TRANSLATE.SPECTRUM_WEB.NP_H",
           "doc": "Now Playing height (auto or pixels)",
-          "value": "126"
+          "value": "100"
         },
         {
           "id": "volume",

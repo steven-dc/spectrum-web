@@ -741,6 +741,16 @@ function setupEventListeners() {
                 audioMotion.minDecibels = min;
                 audioMotion.maxDecibels = max;
                 audioMotion.linearBoost = boost;
+                const minDecInput = document.getElementById('minDecibels');
+                const maxDecInput = document.getElementById('maxDecibels');
+                if (minDecInput) {
+                    minDecInput.value = String(min);
+                    updateValueDisplay('minDecibels', 'minDecibelsValue');
+                }
+                if (maxDecInput) {
+                    maxDecInput.value = String(max);
+                    updateValueDisplay('maxDecibels', 'maxDecibelsValue');
+                }
                 console.log('[Settings] Sensitivity:', preset);
             }
         });
@@ -837,6 +847,17 @@ function setupEventListeners() {
     addListener("barSpace", "input", function () {
         updateValueDisplay('barSpace', 'barSpaceValue');
         if (audioMotion) audioMotion.barSpace = parseFloat(this.value);
+    });
+
+
+    addListener("minDecibels", "input", function () {
+        updateValueDisplay('minDecibels', 'minDecibelsValue');
+        if (audioMotion) audioMotion.minDecibels = parseInt(this.value);
+    });
+
+    addListener("maxDecibels", "input", function () {
+        updateValueDisplay('maxDecibels', 'maxDecibelsValue');
+        if (audioMotion) audioMotion.maxDecibels = parseInt(this.value);
     });
 
     addListener("fillAlpha", "input", function () {
@@ -1087,6 +1108,9 @@ function getCurrentSettings() {
         spinSpeed: parseFloat(document.getElementById('spinSpeed')?.value || 0),
         fftSize: parseInt(document.getElementById('fftSize')?.value || 8192),
         smoothing: parseFloat(document.getElementById('smoothing')?.value || 0.7),
+        // Decibel range for Y-axis
+        minDecibels: (typeof audioMotion?.minDecibels === 'number') ? audioMotion.minDecibels : -85,
+        maxDecibels: (typeof audioMotion?.maxDecibels === 'number') ? audioMotion.maxDecibels : -25,
         ansiBands: getSelectedRadio('ansiBandsSelect') || '0',
         linearAmplitude: getSelectedRadio('linearAmplitudeSelect') || '1',
         weightingFilter: document.getElementById('weightingFilter')?.value || '',
@@ -1275,6 +1299,36 @@ function applyPreset(preset) {
         }
     }
 
+    // Volume (if present in preset)
+    if (preset.volume !== undefined) {
+        audioMotion.volume = preset.volume;
+        const volumeInput = document.getElementById('volume');
+        if (volumeInput) {
+            volumeInput.value = preset.volume;
+            updateValueDisplay('volume', 'volumeValue');
+        }
+    }
+
+    // Apply decibel range if provided and sync inputs/labels
+    if (preset.minDecibels !== undefined) {
+        const minVal = parseFloat(preset.minDecibels);
+        audioMotion.minDecibels = minVal;
+        const minDecInput = document.getElementById('minDecibels');
+        if (minDecInput) {
+            minDecInput.value = String(minVal);
+            updateValueDisplay('minDecibels', 'minDecibelsValue');
+        }
+    }
+    if (preset.maxDecibels !== undefined) {
+        const maxVal = parseFloat(preset.maxDecibels);
+        audioMotion.maxDecibels = maxVal;
+        const maxDecInput = document.getElementById('maxDecibels');
+        if (maxDecInput) {
+            maxDecInput.value = String(maxVal);
+            updateValueDisplay('maxDecibels', 'maxDecibelsValue');
+        }
+    }
+
     if (preset.ansiBands !== undefined) {
         audioMotion.ansiBands = parseInt(preset.ansiBands);
         setRadioValue('ansiBandsSelect', preset.ansiBands.toString());
@@ -1348,6 +1402,9 @@ function applyPreset(preset) {
         if (splitEl) splitEl.dataset.active = preset.splitGrad ? '1' : '0';
     }
 
+    // Final pass: refresh numeric labels for consistency
+    updateValueDisplays();
+
     console.log('[Preset] Applied successfully');
 }
 
@@ -1391,7 +1448,8 @@ function updateValueDisplay(inputId, displayId) {
 function updateValueDisplays() {
     const displays = [
         'barSpace', 'fillAlpha', 'lineWidth', 'radius', 'spinSpeed',
-        'smoothing', 'gravity', 'peakFade', 'peakHold', 'volume'
+        'smoothing', 'gravity', 'peakFade', 'peakHold', 'volume',
+        'minDecibels', 'maxDecibels'
     ];
 
     displays.forEach(id => {
@@ -2678,6 +2736,8 @@ async function initAudioMotion() {
             fftSize: 8192,
             smoothing: 0.7,
             gradient: 'prism',
+            // Highest and lowest decibel values represented on Y-axis.
+            // 0 is the loudest possible volume.
             minDecibels: -85,
             maxDecibels: -25,
             showPeaks: true,
@@ -2904,7 +2964,7 @@ function normalizeSettingsForServer(src) {
     // Numeric conversions
     const intKeys = ['mode','fftSize','minFreq','maxFreq','ansiBands','linearAmplitude','peakFade','peakHold','npX','npY','npW'];
     intKeys.forEach(k => { if (k in out) out[k] = parseInt(out[k], 10); });
-    const floatKeys = ['gravity','barSpace','lineWidth','fillAlpha','smoothing','radius','spinSpeed','bgDim','volume'];
+    const floatKeys = ['gravity','barSpace','lineWidth','fillAlpha','smoothing','radius','spinSpeed','bgDim','volume','minDecibels','maxDecibels'];
     floatKeys.forEach(k => { if (k in out) out[k] = parseFloat(out[k]); });
 
     // Frequency scale alias
@@ -3623,12 +3683,20 @@ window.addEventListener("beforeunload", () => {
     let pos = { x: 0, y: 0 };
     let mouse = { x: 0, y: 0 };
 
+    function getPoint(e) {
+        if (e.touches && e.touches.length) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+        return { x: e.clientX, y: e.clientY };
+    }
+
     function onMouseDown(e) {
         if (e.target.closest(".control-btn") || e.target.classList.contains('resize-handle')) return;
         dragging = true;
         box.classList.add("dragging");
-        mouse.x = e.clientX;
-        mouse.y = e.clientY;
+        const p = getPoint(e);
+        mouse.x = p.x;
+        mouse.y = p.y;
         const rect = box.getBoundingClientRect();
         pos.x = rect.left;
         pos.y = rect.top;
@@ -3637,8 +3705,9 @@ window.addEventListener("beforeunload", () => {
 
     function onMouseMove(e) {
         if (!dragging) return;
-        const dx = e.clientX - mouse.x;
-        const dy = e.clientY - mouse.y;
+        const p = getPoint(e);
+        const dx = p.x - mouse.x;
+        const dy = p.y - mouse.y;
         box.style.left = pos.x + dx + "px";
         box.style.top = pos.y + dy + "px";
         box.style.right = "auto";
@@ -3648,6 +3717,7 @@ window.addEventListener("beforeunload", () => {
         const npY = document.getElementById('npY');
         if (npX) npX.value = Math.round(pos.x + dx);
         if (npY) npY.value = Math.round(pos.y + dy);
+        if (e.cancelable) e.preventDefault();
     }
 
     function onMouseUp() {
@@ -3659,6 +3729,11 @@ window.addEventListener("beforeunload", () => {
     box.addEventListener("mousedown", onMouseDown);
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
+
+    // Touch support for mobile
+    box.addEventListener("touchstart", onMouseDown, { passive: false });
+    document.addEventListener("touchmove", onMouseMove, { passive: false });
+    document.addEventListener("touchend", onMouseUp, { passive: true });
 
     // Visibility control: respect showNowPlaying checkbox
     const showCheckbox = document.getElementById('showNowPlaying');
@@ -3685,15 +3760,17 @@ window.addEventListener("beforeunload", () => {
             : handle.classList.contains('resize-tr') ? 'tr'
                 : handle.classList.contains('resize-bl') ? 'bl' : 'br';
         const rect = box.getBoundingClientRect();
-        resizeStart = { x: e.clientX, y: e.clientY, w: rect.width, h: rect.height, left: rect.left, top: rect.top };
+        const p = getPoint(e);
+        resizeStart = { x: p.x, y: p.y, w: rect.width, h: rect.height, left: rect.left, top: rect.top };
         e.preventDefault();
         e.stopPropagation();
     }
 
     function onResizeMove(e) {
         if (!resizing) return;
-        const dx = e.clientX - resizeStart.x;
-        const dy = e.clientY - resizeStart.y;
+        const p = getPoint(e);
+        const dx = p.x - resizeStart.x;
+        const dy = p.y - resizeStart.y;
         let newW = resizeStart.w;
         let newH = resizeStart.h;
         let newLeft = resizeStart.left;
@@ -3725,6 +3802,7 @@ window.addEventListener("beforeunload", () => {
         if (npY) npY.value = Math.round(newTop);
         if (npW) npW.value = Math.round(newW);
         if (npH) npH.value = Math.round(newH);
+        if (e.cancelable) e.preventDefault();
     }
 
     function onResizeUp() {
@@ -3735,6 +3813,10 @@ window.addEventListener("beforeunload", () => {
     box.addEventListener('mousedown', onResizeDown);
     document.addEventListener('mousemove', onResizeMove);
     document.addEventListener('mouseup', onResizeUp);
+    // Touch support for resize
+    box.addEventListener('touchstart', onResizeDown, { passive: false });
+    document.addEventListener('touchmove', onResizeMove, { passive: false });
+    document.addEventListener('touchend', onResizeUp, { passive: true });
 
     // Apply/reset from settings inputs
     const applyBtn = document.getElementById('applyNowPlayingLayoutBtn');

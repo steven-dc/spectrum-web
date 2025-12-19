@@ -140,9 +140,9 @@
             /* top: calc(16px + 48px + 12px); */
             top: 16px;
             left: 16px;
-            width: 50%;
-            max-width: 1000px;
-            min-width: 320px;
+            /* Responsive width baseline: cap at 1000px, respect side padding */
+            /* width: min(1000px, calc(100% - 32px)); */ 
+            max-width: none;
             background: rgba(0, 0, 0, 0);
             backdrop-filter: blur(20px);
             padding: 16px;
