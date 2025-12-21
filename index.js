@@ -134,7 +134,6 @@ SpectrumWeb.prototype.updateUIConfigValues = function (data) {
             if (option) {
               item.value = option;
             } else {
-              self.logger.warn('[SpectrumWeb] No option found for ' + key + ': ' + value);
               continue;
             }
           }
@@ -143,14 +142,12 @@ SpectrumWeb.prototype.updateUIConfigValues = function (data) {
         }
 
         updated++;
-        self.logger.info('[SpectrumWeb] Updated UIConfig: ' + key + ' = ' + JSON.stringify(item.value));
       }
     }
   }
 
   if (updated > 0) {
     self.saveUIConfig(uiconf);
-    self.logger.info('[SpectrumWeb] Updated ' + updated + ' values in UIConfig.json');
     return true;
   }
 
@@ -203,18 +200,30 @@ SpectrumWeb.prototype.onVolumioStart = function () {
   var self = this;
   var configFile = self.commandRouter.pluginManager.getConfigurationFile(self.context, 'config.json');
 
-  self.logger.info('[SpectrumWeb] Config file: ' + configFile);
+  self.logger.info('[SpectrumWeb] Loading config from: ' + configFile);
+  self.logger.info('[SpectrumWeb] (Plugin template: ' + path.join(__dirname, 'config.json') + ')');
 
   self.config = new (require('v-conf'))();
   self.config.loadFile(configFile);
 
-  // Set default values for general config
-  self.config.addConfigValue('appPort', 'number', 8090);
-  self.config.addConfigValue('wsPort', 'number', 9001);
-  self.config.addConfigValue('fifoPath', 'string', '/tmp/mpd.fifo');
-  self.config.addConfigValue('kioskEnabled', 'boolean', false);
-  var appPort = self.config.get('appPort') || 8090;
-  self.config.addConfigValue('kioskUrl', 'string', 'http://localhost:' + appPort);
+  // Set default values only if they don't exist (to preserve user settings)
+  if (self.config.get('appPort') === undefined) {
+    self.config.set('appPort', 8090);
+  }
+  if (self.config.get('wsPort') === undefined) {
+    self.config.set('wsPort', 9001);
+  }
+  if (self.config.get('fifoPath') === undefined) {
+    self.config.set('fifoPath', '/tmp/mpd.fifo');
+  }
+  if (self.config.get('kioskEnabled') === undefined) {
+    self.config.set('kioskEnabled', false);
+  }
+  if (self.config.get('kioskUrl') === undefined) {
+    var appPort = self.config.get('appPort') || 8090;
+    self.config.set('kioskUrl', 'http://localhost:' + appPort);
+  }
+
 
   // Ensure settings.json is synced from UIConfig.json
   if (!fs.existsSync(self.settingsFile)) {
@@ -297,9 +306,6 @@ SpectrumWeb.prototype.getUIConfig = function () {
     __dirname + '/UIConfig.json'
   )
     .then(function (uiconf) {
-
-      self.logger.info('[SpectrumWeb] Loading UI config from UIConfig.json');
-
       // Load current UIConfig.json to get saved values
       var savedUIConfig = self.loadUIConfig();
 
@@ -324,7 +330,6 @@ SpectrumWeb.prototype.getUIConfig = function () {
                   loadedVal = loadedVal.value;
                 }
                 uiconf.sections[sectionIndex].content[itemIndex].value = loadedVal;
-                self.logger.info('[SpectrumWeb] Loaded ' + item.id + ' = ' + JSON.stringify(loadedVal));
               }
             });
           }
@@ -334,37 +339,21 @@ SpectrumWeb.prototype.getUIConfig = function () {
       // Update general section with config.json values
       var generalSection = uiconf.sections.find(function (s) { return s.id === 'general'; });
       if (generalSection) {
-        // Read the plugin config file directly to obtain 'general' values.
-        // Support both new format { "general": { ... } } and legacy flat keys.
-        var pluginConfig = {};
-        try {
-          var configFilePath = self.commandRouter.pluginManager.getConfigurationFile(self.context, 'config.json');
-          if (fs.existsSync(configFilePath)) {
-            pluginConfig = fs.readJsonSync(configFilePath);
-          }
-        } catch (e) {
-          self.logger.warn('[SpectrumWeb] Could not read config.json:', e.message);
-        }
-
-        // Prefer nested general object, otherwise fall back to top-level keys
-        var gen = (pluginConfig && pluginConfig.general) ? pluginConfig.general : pluginConfig;
-
         generalSection.content.forEach(function (item) {
           if (item.id === 'appPort') {
-            item.value = (gen && gen.appPort !== undefined) ? gen.appPort : (self.config.get('appPort') || 8090);
+            item.value = self.config.get('appPort') || 8090;
           } else if (item.id === 'wsPort') {
-            item.value = (gen && gen.wsPort !== undefined) ? gen.wsPort : (self.config.get('wsPort') || 9001);
+            item.value = self.config.get('wsPort') || 9001;
           } else if (item.id === 'fifoPath') {
-            item.value = (gen && gen.fifoPath !== undefined) ? gen.fifoPath : (self.config.get('fifoPath') || '/tmp/mpd.fifo');
+            item.value = self.config.get('fifoPath') || '/tmp/mpd.fifo';
           } else if (item.id === 'kioskEnabled') {
-            item.value = (gen && gen.kioskEnabled !== undefined) ? gen.kioskEnabled : (self.config.get('kioskEnabled') || false);
+            item.value = self.config.get('kioskEnabled') || false;
           } else if (item.id === 'kioskUrl') {
-            item.value = (gen && gen.kioskUrl !== undefined) ? gen.kioskUrl : (self.config.get('kioskUrl') || 'http://localhost:8090');
+            item.value = self.config.get('kioskUrl') || 'http://localhost:8090';
           }
         });
       }
 
-      self.logger.info('[SpectrumWeb] UI config ready');
       // Sanitize values: ensure non-select inputs have primitive values
       try {
         uiconf.sections.forEach(function (section) {
@@ -398,79 +387,51 @@ SpectrumWeb.prototype.saveGeneralConfig = function (data) {
   var self = this;
   var defer = libQ.defer();
 
-  self.logger.info('[SpectrumWeb] Saving general config...');
-  self.logger.info('[SpectrumWeb] Data: ' + JSON.stringify(data));
+  self.logger.info('[SpectrumWeb] Saving general config to: ' + self.commandRouter.pluginManager.getConfigurationFile(self.context, 'config.json'));
 
   try {
-    // Save to config.json (use new format with nested 'general' object)
-    try {
-      var configFilePath = self.commandRouter.pluginManager.getConfigurationFile(self.context, 'config.json');
-      var currentConfig = {};
-      if (fs.existsSync(configFilePath)) {
-        currentConfig = fs.readJsonSync(configFilePath);
+    // Parse and normalize boolean for kioskEnabled first
+    var kioskEnabled = false;
+    if (data.kioskEnabled !== undefined) {
+      if (typeof data.kioskEnabled === 'boolean') {
+        kioskEnabled = data.kioskEnabled;
+      } else if (typeof data.kioskEnabled === 'string') {
+        kioskEnabled = data.kioskEnabled.toLowerCase() === 'true';
+      } else if (typeof data.kioskEnabled === 'number') {
+        kioskEnabled = data.kioskEnabled !== 0;
+      } else {
+        kioskEnabled = Boolean(data.kioskEnabled);
       }
-      if (!currentConfig || typeof currentConfig !== 'object') currentConfig = {};
-      currentConfig.general = currentConfig.general || {};
-
-      if (data.appPort !== undefined) {
-        var port = parseInt(data.appPort);
-        currentConfig.general.appPort = port;
-        self.config.set('appPort', port);
-        self.logger.info('[SpectrumWeb] config.json.general: appPort = ' + port);
-      }
-
-      if (data.wsPort !== undefined) {
-        var wsport = parseInt(data.wsPort);
-        currentConfig.general.wsPort = wsport;
-        self.config.set('wsPort', wsport);
-        self.logger.info('[SpectrumWeb] config.json.general: wsPort = ' + wsport);
-      }
-
-      if (data.fifoPath !== undefined) {
-        currentConfig.general.fifoPath = String(data.fifoPath);
-        self.config.set('fifoPath', String(data.fifoPath));
-        self.logger.info('[SpectrumWeb] config.json.general: fifoPath = ' + data.fifoPath);
-      }
-
-      if (data.kioskEnabled !== undefined) {
-        var kioskEnabled = Boolean(data.kioskEnabled);
-        currentConfig.general.kioskEnabled = kioskEnabled;
-        self.config.set('kioskEnabled', kioskEnabled);
-        self.logger.info('[SpectrumWeb] config.json.general: kioskEnabled = ' + kioskEnabled);
-
-        // Apply kiosk mode change
-        if (kioskEnabled) {
-          var appPort = self.config.get('appPort') || 8090;
-          var kioskUrl = data.kioskUrl || self.config.get('kioskUrl') || ('http://localhost:' + appPort);
-          self.enableKioskMode(kioskUrl);
-        } else {
-          self.disableKioskMode();
-        }
-      }
-
-      if (data.kioskUrl !== undefined) {
-        currentConfig.general.kioskUrl = String(data.kioskUrl);
-        self.config.set('kioskUrl', String(data.kioskUrl));
-        self.logger.info('[SpectrumWeb] config.json.general: kioskUrl = ' + data.kioskUrl);
-
-        // If kiosk is enabled, restart with new URL
-        if (self.config.get('kioskEnabled')) {
-          self.enableKioskMode(String(data.kioskUrl));
-        }
-      }
-
-      // Persist new config structure back to file
-      try {
-        fs.writeJsonSync(configFilePath, currentConfig, { spaces: 2 });
-        self.logger.info('[SpectrumWeb] Written updated config.json with general section');
-      } catch (e) {
-        self.logger.error('[SpectrumWeb] Failed to write config.json:', e.message);
-      }
-    } catch (e) {
-      self.logger.error('[SpectrumWeb] Error updating config.json:', e.message);
+    } else {
+      kioskEnabled = self.config.get('kioskEnabled') || false;
     }
 
-    // Also update UIConfig.json
+    // Save to config.json (maintain existing flat structure)
+    if (data.appPort !== undefined) {
+      var port = parseInt(data.appPort);
+      self.config.set('appPort', port);
+    }
+
+    if (data.wsPort !== undefined) {
+      var wsport = parseInt(data.wsPort);
+      self.config.set('wsPort', wsport);
+    }
+
+    if (data.fifoPath !== undefined) {
+      self.config.set('fifoPath', String(data.fifoPath));
+    }
+
+    self.config.set('kioskEnabled', kioskEnabled);
+
+    if (data.kioskUrl !== undefined) {
+      self.config.set('kioskUrl', String(data.kioskUrl));
+    }
+
+    // Save config to disk
+    self.config.save();
+    self.logger.info('[SpectrumWeb] Config saved - kioskEnabled: ' + kioskEnabled);
+
+    // Update UIConfig.json
     var uiconf = self.loadUIConfig();
     if (uiconf) {
       var generalSection = uiconf.sections.find(function (s) { return s.id === 'general'; });
@@ -478,15 +439,31 @@ SpectrumWeb.prototype.saveGeneralConfig = function (data) {
         generalSection.content.forEach(function (item) {
           if (data[item.id] !== undefined) {
             var newVal = data[item.id];
-            // If the UI sent an option object, unwrap it for input fields
-            if (typeof newVal === 'object' && newVal !== null && newVal.value !== undefined) {
-              newVal = newVal.value;
+            
+            // Handle kioskEnabled with the normalized value
+            if (item.id === 'kioskEnabled') {
+              newVal = kioskEnabled;
+            } else {
+              // For non-boolean fields, unwrap object values if needed
+              if (typeof newVal === 'object' && newVal !== null && newVal.value !== undefined) {
+                newVal = newVal.value;
+              }
             }
+            
             item.value = newVal;
           }
         });
         self.saveUIConfig(uiconf);
       }
+    }
+
+    // Apply kiosk mode changes
+    if (kioskEnabled) {
+      var appPort = self.config.get('appPort') || 8090;
+      var kioskUrl = data.kioskUrl || self.config.get('kioskUrl') || ('http://localhost:' + appPort);
+      self.enableKioskMode(kioskUrl);
+    } else {
+      self.disableKioskMode();
     }
 
     self.commandRouter.pushToastMessage(
@@ -513,7 +490,6 @@ SpectrumWeb.prototype.saveAnalyzerConfig = function (data) {
   var defer = libQ.defer();
 
   self.logger.info('[SpectrumWeb] Saving analyzer config...');
-  self.logger.info('[SpectrumWeb] Data received: ' + JSON.stringify(data));
 
   try {
     // Step 1: Update UIConfig.json with new values
@@ -529,10 +505,6 @@ SpectrumWeb.prototype.saveAnalyzerConfig = function (data) {
     if (!success) {
       throw new Error('Failed to sync settings.json');
     }
-
-    self.logger.info('[SpectrumWeb] Flow completed:');
-    self.logger.info('[SpectrumWeb]   1. User data → UIConfig.json ✓');
-    self.logger.info('[SpectrumWeb]   2. UIConfig.json → settings.json ✓');
 
     // Step 3: Broadcast to WebSocket clients
     self.broadcastSettingsUpdate();
@@ -697,9 +669,6 @@ SpectrumWeb.prototype.enableKioskMode = function (url) {
 
     self.logger.info('[SpectrumWeb] Enabling kiosk mode with URL: ' + url);
 
-    // Stop any existing kiosk instance
-    self.disableKioskMode();
-
     // Update kiosk.sh with the correct URL
     var kioskShPath = path.join(__dirname, 'kiosk.sh');
     if (fs.existsSync(kioskShPath)) {
@@ -719,7 +688,7 @@ SpectrumWeb.prototype.enableKioskMode = function (url) {
 
     // Enable and start the service (should already exist from install.sh)
     execSync('sudo systemctl enable spectrum-kiosk.service');
-    execSync('sudo systemctl start spectrum-kiosk.service');
+    execSync('sudo systemctl restart spectrum-kiosk.service');
 
     self.logger.info('[SpectrumWeb] Kiosk mode enabled');
 
