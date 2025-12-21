@@ -3406,6 +3406,31 @@ function syncUIWithSettings(settings) {
         const volumioUrlInput = document.getElementById('volumioUrl');
         if (volumioUrlInput && settings.volumioUrl) volumioUrlInput.value = settings.volumioUrl;
 
+        // Sync random configuration checkboxes
+        const randomCheckboxes = [
+            'randomMode', 'randomGradient', 'randomGradientRight', 'randomColorMode',
+            'randomBarSpace', 'randomFillAlpha', 'randomLineWidth', 'randomSensitivity',
+            'randomMirror', 'randomAlphaBars', 'randomLumiBars', 'randomLedBars',
+            'randomOutlineBars', 'randomRadial', 'randomRoundBars', 'randomBgType',
+            'randomBgFile', 'randomBgFit', 'randomOnTrackChange', 'randomOnInterval'
+        ];
+        randomCheckboxes.forEach(cbId => {
+            if (settings[cbId] !== undefined) {
+                const checkbox = document.getElementById(cbId);
+                if (checkbox) {
+                    checkbox.checked = !!settings[cbId];
+                }
+            }
+        });
+
+        // Sync random interval value
+        if (settings.randomInterval !== undefined) {
+            const intervalInput = document.getElementById('randomInterval');
+            if (intervalInput) {
+                intervalInput.value = settings.randomInterval;
+            }
+        }
+
         // Finally ensure background gets applied according to synced settings
         updateBackgroundControls();
         applyBackground();
