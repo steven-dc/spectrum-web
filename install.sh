@@ -85,13 +85,4 @@ else
     echo "[WARNING] Failed to create kiosk service"
 fi
 
-echo ""
-echo "=========================================="
-echo "[SUCCESS] Spectrum Web installed successfully!"
-echo "=========================================="
-echo ""
-echo "[INFO] After enabling the plugin, access visualizer at:"
-echo "   http://volumio.local:8090"
-echo ""
-
-exit 0
+echo "plugininstallend"
