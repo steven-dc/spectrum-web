@@ -18,55 +18,6 @@ let frameCount = 0;
 let dataReceived = 0;
 let lastFpsTime = Date.now();
 let fpsInterval = null;
-
-// ===========================
-// VOLUMIO SOCKET.IO (PUSH UPDATES)
-// ===========================
-function connectVolumioSocket() {
-    if (typeof io === 'undefined') {
-        console.warn('[Volumio Socket] Socket.IO client not available; using HTTP polling');
-        return;
-    }
-    try {
-        const base = getVolumioUrl(); // e.g., http://host:3000
-        console.log('[Volumio Socket] Connecting to', base);
-        volumioSocket = io(base, { transports: ['websocket'], path: '/socket.io' });
-
-        volumioSocket.on('connect', () => {
-            console.log('[Volumio Socket] Connected');
-            // Stop polling if active
-            if (volumioStateInterval) {
-                clearInterval(volumioStateInterval);
-                volumioStateInterval = null;
-            }
-            // Request initial state/queue
-            try { volumioSocket.emit('getState'); } catch (_) {}
-            try { volumioSocket.emit('getQueue'); } catch (_) {}
-        });
-
-        volumioSocket.on('disconnect', () => {
-            console.warn('[Volumio Socket] Disconnected; fallback to polling');
-            // Resume polling
-            if (!volumioStateInterval) {
-                volumioStateInterval = setInterval(fetchVolumioState, 2000);
-            }
-        });
-
-        volumioSocket.on('pushState', (state) => {
-            // console.log('[Volumio Socket] pushState', state);
-            updateNowPlaying(state);
-        });
-
-        volumioSocket.on('pushQueue', (queue) => {
-            // console.log('[Volumio Socket] pushQueue', queue);
-            displayQueue(Array.isArray(queue) ? queue : (queue && queue.queue) || []);
-        });
-
-    } catch (e) {
-        console.warn('[Volumio Socket] Error:', e.message);
-    }
-}
-
 let audioFormat = { sampleRate: 44100, channels: 2, bitsPerSample: 16 };
 let audioStarted = false;
 let settingsPanelVisible = false;
@@ -526,34 +477,6 @@ window.switchAudioSource = switchAudioSource;
 window.getAudioSourceStatus = getAudioSourceStatus;
 window.MPDPlayer = MPDPlayer;
 
-// Initialize when ready
-// if (window.pcmPlayer) {
-//     const volumeContainer = document.getElementById('volumeControlContainer');
-//     if (volumeContainer) {
-//         const volumeControl = createVolumeControl(window.pcmPlayer);
-//         volumeContainer.appendChild(volumeControl);
-//         console.log('[Volume Control] Initialized immediately');
-//     }
-// } else {
-//     let attempts = 0;
-//     const checkPCM = setInterval(() => {
-//         attempts++;
-//         if (window.pcmPlayer) {
-//             clearInterval(checkPCM);
-//             const volumeContainer = document.getElementById('volumeControlContainer');
-//             if (volumeContainer) {
-//                 const volumeControl = createVolumeControl(window.pcmPlayer);
-//                 volumeContainer.appendChild(volumeControl);
-//                 console.log('[Volume Control] Initialized after waiting');
-//             }
-//         }
-//         if (attempts > 50) {
-//             clearInterval(checkPCM);
-//             console.error('[Volume Control] PCM Player not found');
-//         }
-//     }, 100);
-// }
-
 // ===========================
 // UI FUNCTIONS
 // ===========================
@@ -664,375 +587,372 @@ function setupEventListeners() {
         if (el) el.addEventListener(event, handler);
     };
 
-    // Mode Select
-    const modeSelect = document.getElementById('modeSelect');
-    if (modeSelect) {
-        modeSelect.addEventListener('change', function (e) {
-            const mode = parseInt(e.target.value);
-            if (audioMotion) {
-                audioMotion.mode = mode;
-                console.log('[Settings] Mode:', mode);
-            }
-        });
-    }
-
-    // Gradients
-    addListener("gradient", "change", function () {
-        if (audioMotion) {
-            audioMotion.gradient = this.value;
-            const linkGrads = document.getElementById('linkGrads');
-            if (linkGrads && linkGrads.dataset.active === '1') {
-                audioMotion.gradientRight = this.value;
-                const gradRight = document.getElementById('gradientRight');
-                if (gradRight) gradRight.value = this.value;
-            }
-        }
-    });
-
-    addListener("gradientRight", "change", function () {
-        if (audioMotion) audioMotion.gradientRight = this.value;
-    });
-
-    addListener("linkGrads", "click", function () {
-        const active = this.dataset.active === '1';
-        this.dataset.active = active ? '0' : '1';
-
-        const gradientRight = document.getElementById('gradientRight');
-        if (gradientRight) {
-            gradientRight.disabled = !active;
-            if (!active && audioMotion) {
-                const mainGrad = document.getElementById('gradient').value;
-                audioMotion.gradient = mainGrad;
-                audioMotion.gradientRight = mainGrad;
-                gradientRight.value = mainGrad;
-            }
-        }
-    });
-
-    addListener("splitGrad", "click", function () {
-        const active = this.dataset.active === '1';
-        this.dataset.active = active ? '0' : '1';
-        if (audioMotion) {
-            audioMotion.splitGradient = !active;
-        }
-    });
-
-    // Color Mode
-    const colorModeSelect = document.getElementById('colorModeSelect');
-    if (colorModeSelect) {
-        colorModeSelect.addEventListener('change', function (e) {
-            if (audioMotion) audioMotion.colorMode = e.target.value;
-        });
-    }
-
-    // Sensitivity
-    const sensitivitySelect = document.getElementById('sensitivitySelect');
-    if (sensitivitySelect) {
-        sensitivitySelect.addEventListener('change', function (e) {
-            const preset = parseInt(e.target.value);
-            const sensitivityPresets = [
-                { min: -70, max: -20, boost: 1 },
-                { min: -85, max: -25, boost: 1.6 },
-                { min: -100, max: -30, boost: 2.4 }
-            ];
-
-            if (audioMotion && sensitivityPresets[preset]) {
-                const { min, max, boost } = sensitivityPresets[preset];
-                audioMotion.minDecibels = min;
-                audioMotion.maxDecibels = max;
-                audioMotion.linearBoost = boost;
-                const minDecInput = document.getElementById('minDecibels');
-                const maxDecInput = document.getElementById('maxDecibels');
-                if (minDecInput) {
-                    minDecInput.value = String(min);
-                    updateValueDisplay('minDecibels', 'minDecibelsValue');
-                }
-                if (maxDecInput) {
-                    maxDecInput.value = String(max);
-                    updateValueDisplay('maxDecibels', 'maxDecibelsValue');
-                }
-                console.log('[Settings] Sensitivity:', preset);
-            }
-        });
-    }
-
-    // Effects
-    const effectSwitches = ['alphaBars', 'lumiBars', 'ledBars', 'outlineBars', 'radial', 'roundBars'];
-    effectSwitches.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('click', function () {
-                const active = this.dataset.active === '1';
-                this.dataset.active = active ? '0' : '1';
+    // Grouped initializers for clarity
+    function initMode() {
+        const modeSelect = document.getElementById('modeSelect');
+        if (modeSelect) {
+            modeSelect.addEventListener('change', function (e) {
+                const mode = parseInt(e.target.value);
                 if (audioMotion) {
-                    audioMotion[id] = !active;
+                    audioMotion.mode = mode;
+                    console.log('[Settings] Mode:', mode);
                 }
             });
         }
-    });
+    }
 
-    // Reflex
-    const reflexSelect = document.getElementById('reflexSelect');
-    if (reflexSelect) {
-        reflexSelect.addEventListener('change', function (e) {
-            const value = e.target.value;
+    function initGradients() {
+        addListener('gradient', 'change', function () {
             if (audioMotion) {
-                switch (value) {
-                    case '3':
-                        audioMotion.reflexRatio = 0.25;
-                        audioMotion.reflexAlpha = 0.2;
-                        break;
-                    case '1':
-                        audioMotion.reflexRatio = 0.4;
-                        audioMotion.reflexAlpha = 0.2;
-                        break;
-                    case '2':
-                        audioMotion.reflexRatio = 0.5;
-                        audioMotion.reflexAlpha = 1;
-                        break;
-                    default:
-                        audioMotion.reflexRatio = 0;
+                audioMotion.gradient = this.value;
+                const linkGrads = document.getElementById('linkGrads');
+                if (linkGrads && linkGrads.dataset.active === '1') {
+                    audioMotion.gradientRight = this.value;
+                    const gradRight = document.getElementById('gradientRight');
+                    if (gradRight) gradRight.value = this.value;
                 }
             }
         });
-    }
 
-    // Scale Labels
-    const scaleXSelect = document.getElementById('scaleXSelect');
-    if (scaleXSelect) {
-        scaleXSelect.addEventListener('change', function (e) {
-            const value = parseInt(e.target.value);
+        addListener('gradientRight', 'change', function () {
+            if (audioMotion) audioMotion.gradientRight = this.value;
+        });
+
+        addListener('linkGrads', 'click', function () {
+            const active = this.dataset.active === '1';
+            this.dataset.active = active ? '0' : '1';
+
+            const gradientRight = document.getElementById('gradientRight');
+            if (gradientRight) {
+                gradientRight.disabled = !active;
+                if (!active && audioMotion) {
+                    const mainGrad = document.getElementById('gradient').value;
+                    audioMotion.gradient = mainGrad;
+                    audioMotion.gradientRight = mainGrad;
+                    gradientRight.value = mainGrad;
+                }
+            }
+        });
+
+        addListener('splitGrad', 'click', function () {
+            const active = this.dataset.active === '1';
+            this.dataset.active = active ? '0' : '1';
             if (audioMotion) {
-                audioMotion.showScaleX = value !== 0;
-                audioMotion.noteLabels = value === 2;
+                audioMotion.splitGradient = !active;
             }
         });
     }
 
-    const scaleYSelect = document.getElementById('showScaleY');
-    if (scaleYSelect) {
-        scaleYSelect.addEventListener('change', function (e) {
-            if (audioMotion) {
-                audioMotion.showScaleY = e.target.value === 'true';
-            }
-        });
-    }
+    function initColorAndSensitivity() {
+        const colorModeSelect = document.getElementById('colorModeSelect');
+        if (colorModeSelect) {
+            colorModeSelect.addEventListener('change', function (e) {
+                if (audioMotion) audioMotion.colorMode = e.target.value;
+            });
+        }
 
-    // Channel Layout
-    addListener("channelLayout", "change", function () {
-        if (audioMotion) audioMotion.channelLayout = this.value;
-    });
+        const sensitivitySelect = document.getElementById('sensitivitySelect');
+        if (sensitivitySelect) {
+            sensitivitySelect.addEventListener('change', function (e) {
+                const preset = parseInt(e.target.value);
+                const sensitivityPresets = [
+                    { min: -70, max: -20, boost: 1 },
+                    { min: -85, max: -25, boost: 1.6 },
+                    { min: -100, max: -30, boost: 2.4 }
+                ];
 
-    // Mirror
-    const mirrorSelect = document.getElementById('mirrorSelect');
-    if (mirrorSelect) {
-        mirrorSelect.addEventListener('change', function (e) {
-            if (audioMotion) audioMotion.mirror = parseInt(e.target.value);
-        });
-    }
-
-    // Frequency Scale
-    const freqScaleSelect = document.getElementById('freqScaleSelect');
-    if (freqScaleSelect) {
-        freqScaleSelect.addEventListener('change', function (e) {
-            if (audioMotion) audioMotion.frequencyScale = e.target.value;
-        });
-    }
-
-    // Frequency Range
-    addListener("minFreq", "change", updateFreqRange);
-    addListener("maxFreq", "change", updateFreqRange);
-
-    // Bar Adjustments
-    addListener("barSpace", "input", function () {
-        updateValueDisplay('barSpace', 'barSpaceValue');
-        if (audioMotion) audioMotion.barSpace = parseFloat(this.value);
-    });
-
-
-    addListener("minDecibels", "input", function () {
-        updateValueDisplay('minDecibels', 'minDecibelsValue');
-        if (audioMotion) audioMotion.minDecibels = parseInt(this.value);
-    });
-
-    addListener("maxDecibels", "input", function () {
-        updateValueDisplay('maxDecibels', 'maxDecibelsValue');
-        if (audioMotion) audioMotion.maxDecibels = parseInt(this.value);
-    });
-
-    addListener("fillAlpha", "input", function () {
-        updateValueDisplay('fillAlpha', 'fillAlphaValue');
-        if (audioMotion) audioMotion.fillAlpha = parseFloat(this.value);
-    });
-
-    addListener("volume", "input", function () {
-        updateValueDisplay('volume', 'volumeValue');
-        if (audioMotion) audioMotion.volume = parseFloat(this.value);
-    });
-
-    addListener("lineWidth", "input", function () {
-        updateValueDisplay('lineWidth', 'lineWidthValue');
-        if (audioMotion) audioMotion.lineWidth = parseFloat(this.value);
-    });
-
-    // Radial
-    addListener("radius", "input", function () {
-        updateValueDisplay('radius', 'radiusValue');
-        if (audioMotion) audioMotion.radius = parseFloat(this.value);
-    });
-
-    addListener("spinSpeed", "input", function () {
-        updateValueDisplay('spinSpeed', 'spinSpeedValue');
-        if (audioMotion) audioMotion.spinSpeed = parseFloat(this.value);
-    });
-
-    // FFT
-    addListener("fftSize", "change", function () {
-        if (audioMotion) audioMotion.fftSize = parseInt(this.value);
-    });
-
-    addListener("smoothing", "input", function () {
-        updateValueDisplay('smoothing', 'smoothingValue');
-        if (audioMotion) audioMotion.smoothing = parseFloat(this.value);
-    });
-
-    const ansiBandsSelect = document.getElementById('ansiBandsSelect');
-    if (ansiBandsSelect) {
-        ansiBandsSelect.addEventListener('change', function (e) {
-            if (audioMotion) audioMotion.ansiBands = parseInt(e.target.value);
-        });
-    }
-
-    const linearAmplitudeSelect = document.getElementById('linearAmplitudeSelect');
-    if (linearAmplitudeSelect) {
-        linearAmplitudeSelect.addEventListener('change', function (e) {
-            if (audioMotion) audioMotion.linearAmplitude = parseInt(e.target.value);
-        });
-    }
-
-    addListener("weightingFilter", "change", function () {
-        if (audioMotion) audioMotion.weightingFilter = this.value;
-    });
-
-    // Peak Settings
-    addListener("gravity", "input", function () {
-        updateValueDisplay('gravity', 'gravityValue');
-        if (audioMotion) audioMotion.gravity = parseFloat(this.value);
-    });
-
-    addListener("peakFade", "input", function () {
-        updateValueDisplay('peakFade', 'peakFadeValue');
-        if (audioMotion) audioMotion.peakFadeTime = parseInt(this.value);
-    });
-
-    addListener("peakHold", "input", function () {
-        updateValueDisplay('peakHold', 'peakHoldValue');
-        if (audioMotion) audioMotion.peakHoldTime = parseInt(this.value);
-    });
-
-    // Peak Visibility Toggles
-    const peakToggles = ['showPeaks', 'peakLine'];
-    peakToggles.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('click', function () {
-                const wasActive = this.dataset.active === '1';
-                const nowActive = !wasActive;
-                this.dataset.active = nowActive ? '1' : '0';
-                if (audioMotion) {
-                    audioMotion[id] = nowActive;
+                if (audioMotion && sensitivityPresets[preset]) {
+                    const { min, max, boost } = sensitivityPresets[preset];
+                    audioMotion.minDecibels = min;
+                    audioMotion.maxDecibels = max;
+                    audioMotion.linearBoost = boost;
+                    const minDecInput = document.getElementById('minDecibels');
+                    const maxDecInput = document.getElementById('maxDecibels');
+                    if (minDecInput) {
+                        minDecInput.value = String(min);
+                        updateValueDisplay('minDecibels', 'minDecibelsValue');
+                    }
+                    if (maxDecInput) {
+                        maxDecInput.value = String(max);
+                        updateValueDisplay('maxDecibels', 'maxDecibelsValue');
+                    }
+                    console.log('[Settings] Sensitivity:', preset);
                 }
             });
         }
-    });
+    }
 
-    // Display
-    addListener("showFPS", "click", function () {
-        const wasActive = this.dataset.active === '1';
-        const nowActive = !wasActive;
-        this.dataset.active = nowActive ? '1' : '0';
-        if (audioMotion) audioMotion.showFPS = nowActive;
-        // ensureFpsCounterTimer();
-    });
+    function initEffects() {
+        const effectSwitches = ['alphaBars', 'lumiBars', 'ledBars', 'outlineBars', 'radial', 'roundBars'];
+        effectSwitches.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('click', function () {
+                    const active = this.dataset.active === '1';
+                    this.dataset.active = active ? '0' : '1';
+                    if (audioMotion) {
+                        audioMotion[id] = !active;
+                    }
+                });
+            }
+        });
+    }
 
-    addListener("loRes", "click", function () {
-        const wasActive = this.dataset.active === '1';
-        const nowActive = !wasActive;
-        this.dataset.active = nowActive ? '1' : '0';
-        applyLoRes(nowActive);
-    });
-
-    // General
-    // addListener("maxFPS", "change", function () {
-    //     if (audioMotion) audioMotion.maxFPS = parseInt(this.value);
-    // });
-
-    // addListener("fsHeight", "input", function () {
-    //     const val = parseInt(this.value);
-    //     const display = document.getElementById('fsHeightValue');
-    //     if (display) display.textContent = val + '%';
-    // });
-
-    addListener("showControlBar", "change", function () {
-        const fpsCounter = document.getElementById("fpsCounter");
-        const status = document.getElementById("status");
-        if (this.checked) {
-            if (fpsCounter) fpsCounter.style.display = "";
-            if (status) status.style.display = "";
-        } else {
-            if (fpsCounter) fpsCounter.style.display = "none";
-            if (status) status.style.display = "none";
+    function initReflexScaleChannel() {
+        const reflexSelect = document.getElementById('reflexSelect');
+        if (reflexSelect) {
+            reflexSelect.addEventListener('change', function (e) {
+                const value = e.target.value;
+                if (audioMotion) {
+                    switch (value) {
+                        case '3':
+                            audioMotion.reflexRatio = 0.25;
+                            audioMotion.reflexAlpha = 0.2;
+                            break;
+                        case '1':
+                            audioMotion.reflexRatio = 0.4;
+                            audioMotion.reflexAlpha = 0.2;
+                            break;
+                        case '2':
+                            audioMotion.reflexRatio = 0.5;
+                            audioMotion.reflexAlpha = 1;
+                            break;
+                        default:
+                            audioMotion.reflexRatio = 0;
+                    }
+                }
+            });
         }
-    });
 
-    addListener("showNowPlaying", "change", function () {
-        const nowPlaying = document.getElementById("nowPlaying");
-        if (nowPlaying) {
-            nowPlaying.classList.toggle("hidden-by-css", !this.checked);
+        const scaleXSelect = document.getElementById('scaleXSelect');
+        if (scaleXSelect) {
+            scaleXSelect.addEventListener('change', function (e) {
+                const value = parseInt(e.target.value);
+                if (audioMotion) {
+                    audioMotion.showScaleX = value !== 0;
+                    audioMotion.noteLabels = value === 2;
+                }
+            });
         }
-    });
 
-    // Now Playing Layout inputs apply
-    const npApply = document.getElementById('applyNowPlayingLayoutBtn');
-    if (npApply) {
-        npApply.addEventListener('click', function () {
-            const box = document.getElementById('nowPlaying');
-            if (!box) return;
-            const x = parseInt(document.getElementById('npX')?.value || '16');
-            const y = parseInt(document.getElementById('npY')?.value || '16');
-            const w = parseInt(document.getElementById('npW')?.value || '600');
-            const hVal = document.getElementById('npH')?.value || 'auto';
-            box.style.left = x + 'px';
-            box.style.top = y + 'px';
-            box.style.width = w + 'px';
-            if (hVal && hVal !== 'auto') {
-                box.style.height = parseInt(hVal) + 'px';
+        const scaleYSelect = document.getElementById('showScaleY');
+        if (scaleYSelect) {
+            scaleYSelect.addEventListener('change', function (e) {
+                if (audioMotion) {
+                    audioMotion.showScaleY = e.target.value === 'true';
+                }
+            });
+        }
+
+        addListener('channelLayout', 'change', function () {
+            if (audioMotion) audioMotion.channelLayout = this.value;
+        });
+
+        const mirrorSelect = document.getElementById('mirrorSelect');
+        if (mirrorSelect) {
+            mirrorSelect.addEventListener('change', function (e) {
+                if (audioMotion) audioMotion.mirror = parseInt(e.target.value);
+            });
+        }
+
+        const freqScaleSelect = document.getElementById('freqScaleSelect');
+        if (freqScaleSelect) {
+            freqScaleSelect.addEventListener('change', function (e) {
+                if (audioMotion) audioMotion.frequencyScale = e.target.value;
+            });
+        }
+
+        addListener('minFreq', 'change', updateFreqRange);
+        addListener('maxFreq', 'change', updateFreqRange);
+    }
+
+    function initBarAndDisplay() {
+        addListener('barSpace', 'input', function () {
+            updateValueDisplay('barSpace', 'barSpaceValue');
+            if (audioMotion) audioMotion.barSpace = parseFloat(this.value);
+        });
+
+        addListener('minDecibels', 'input', function () {
+            updateValueDisplay('minDecibels', 'minDecibelsValue');
+            if (audioMotion) audioMotion.minDecibels = parseInt(this.value);
+        });
+
+        addListener('maxDecibels', 'input', function () {
+            updateValueDisplay('maxDecibels', 'maxDecibelsValue');
+            if (audioMotion) audioMotion.maxDecibels = parseInt(this.value);
+        });
+
+        addListener('fillAlpha', 'input', function () {
+            updateValueDisplay('fillAlpha', 'fillAlphaValue');
+            if (audioMotion) audioMotion.fillAlpha = parseFloat(this.value);
+        });
+
+        addListener('volume', 'input', function () {
+            updateValueDisplay('volume', 'volumeValue');
+            if (audioMotion) audioMotion.volume = parseFloat(this.value);
+        });
+
+        addListener('lineWidth', 'input', function () {
+            updateValueDisplay('lineWidth', 'lineWidthValue');
+            if (audioMotion) audioMotion.lineWidth = parseFloat(this.value);
+        });
+
+        addListener('radius', 'input', function () {
+            updateValueDisplay('radius', 'radiusValue');
+            if (audioMotion) audioMotion.radius = parseFloat(this.value);
+        });
+
+        addListener('spinSpeed', 'input', function () {
+            updateValueDisplay('spinSpeed', 'spinSpeedValue');
+            if (audioMotion) audioMotion.spinSpeed = parseFloat(this.value);
+        });
+
+        addListener('fftSize', 'change', function () {
+            if (audioMotion) audioMotion.fftSize = parseInt(this.value);
+        });
+
+        addListener('smoothing', 'input', function () {
+            updateValueDisplay('smoothing', 'smoothingValue');
+            if (audioMotion) audioMotion.smoothing = parseFloat(this.value);
+        });
+
+        const ansiBandsSelect = document.getElementById('ansiBandsSelect');
+        if (ansiBandsSelect) {
+            ansiBandsSelect.addEventListener('change', function (e) {
+                if (audioMotion) audioMotion.ansiBands = parseInt(e.target.value);
+            });
+        }
+
+        const linearAmplitudeSelect = document.getElementById('linearAmplitudeSelect');
+        if (linearAmplitudeSelect) {
+            linearAmplitudeSelect.addEventListener('change', function (e) {
+                if (audioMotion) audioMotion.linearAmplitude = parseInt(e.target.value);
+            });
+        }
+
+        addListener('weightingFilter', 'change', function () {
+            if (audioMotion) audioMotion.weightingFilter = this.value;
+        });
+
+        // Peak Settings
+        addListener('gravity', 'input', function () {
+            updateValueDisplay('gravity', 'gravityValue');
+            if (audioMotion) audioMotion.gravity = parseFloat(this.value);
+        });
+
+        addListener('peakFade', 'input', function () {
+            updateValueDisplay('peakFade', 'peakFadeValue');
+            if (audioMotion) audioMotion.peakFadeTime = parseInt(this.value);
+        });
+
+        addListener('peakHold', 'input', function () {
+            updateValueDisplay('peakHold', 'peakHoldValue');
+            if (audioMotion) audioMotion.peakHoldTime = parseInt(this.value);
+        });
+
+        // Peak Visibility Toggles
+        const peakToggles = ['showPeaks', 'peakLine'];
+        peakToggles.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('click', function () {
+                    const wasActive = this.dataset.active === '1';
+                    const nowActive = !wasActive;
+                    this.dataset.active = nowActive ? '1' : '0';
+                    if (audioMotion) {
+                        audioMotion[id] = nowActive;
+                    }
+                });
+            }
+        });
+
+        // Display toggles
+        addListener('showFPS', 'click', function () {
+            const wasActive = this.dataset.active === '1';
+            const nowActive = !wasActive;
+            this.dataset.active = nowActive ? '1' : '0';
+            if (audioMotion) audioMotion.showFPS = nowActive;
+        });
+
+        addListener('loRes', 'click', function () {
+            const wasActive = this.dataset.active === '1';
+            const nowActive = !wasActive;
+            this.dataset.active = nowActive ? '1' : '0';
+            applyLoRes(nowActive);
+        });
+
+        addListener('showControlBar', 'change', function () {
+            const fpsCounter = document.getElementById('fpsCounter');
+            const status = document.getElementById('status');
+            if (this.checked) {
+                if (fpsCounter) fpsCounter.style.display = '';
+                if (status) status.style.display = '';
             } else {
-                box.style.height = '';
+                if (fpsCounter) fpsCounter.style.display = 'none';
+                if (status) status.style.display = 'none';
             }
-            box.style.right = 'auto';
-            box.style.bottom = 'auto';
+        });
+
+        addListener('showNowPlaying', 'change', function () {
+            const nowPlaying = document.getElementById('nowPlaying');
+            if (nowPlaying) {
+                nowPlaying.classList.toggle('hidden-by-css', !this.checked);
+            }
         });
     }
 
-    // Background
-    addListener("bgType", "change", function () {
-        updateBackgroundControls();
-        applyBackground();
-    });
+    function initNowPlayingAndBackground() {
+        // Now Playing Layout inputs apply
+        const npApply = document.getElementById('applyNowPlayingLayoutBtn');
+        if (npApply) {
+            npApply.addEventListener('click', function () {
+                const box = document.getElementById('nowPlaying');
+                if (!box) return;
+                const x = parseInt(document.getElementById('npX')?.value || '16');
+                const y = parseInt(document.getElementById('npY')?.value || '16');
+                const w = parseInt(document.getElementById('npW')?.value || '600');
+                const hVal = document.getElementById('npH')?.value || 'auto';
+                box.style.left = x + 'px';
+                box.style.top = y + 'px';
+                box.style.width = w + 'px';
+                if (hVal && hVal !== 'auto') {
+                    box.style.height = parseInt(hVal) + 'px';
+                } else {
+                    box.style.height = '';
+                }
+                box.style.right = 'auto';
+                box.style.bottom = 'auto';
+            });
+        }
 
-    addListener("bgFile", "change", applyBackground);
+        // Background
+        addListener('bgType', 'change', function () {
+            updateBackgroundControls();
+            applyBackground();
+        });
 
-    addListener("bgDim", "input", function () {
-        const val = parseFloat(this.value);
-        const display = document.getElementById("bgDimValue");
-        if (display) display.textContent = val.toFixed(1);
-        updateBackgroundDim(val);
-    });
+        addListener('bgFile', 'change', applyBackground);
 
-    addListener("bgFit", "change", function () {
-        updateBackgroundFit(this.value);
-    });
+        addListener('bgDim', 'input', function () {
+            const val = parseFloat(this.value);
+            const display = document.getElementById('bgDimValue');
+            if (display) display.textContent = val.toFixed(1);
+            updateBackgroundDim(val);
+        });
+
+        addListener('bgFit', 'change', function () {
+            updateBackgroundFit(this.value);
+        });
+    }
+
+    // run initializers
+    initMode();
+    initGradients();
+    initColorAndSensitivity();
+    initEffects();
+    initReflexScaleChannel();
+    initBarAndDisplay();
+    initNowPlayingAndBackground();
 }
 
 // ===========================
@@ -1403,17 +1323,11 @@ function applyPreset(preset) {
         if (el) el.dataset.active = preset.peakLine ? '1' : '0';
     }
 
-    // if (preset.maxFPS !== undefined) {
-    //     audioMotion.maxFPS = preset.maxFPS;
-    //     const maxFPSSelect = document.getElementById('maxFPS');
-    //     if (maxFPSSelect) maxFPSSelect.value = preset.maxFPS;
-    // }
 
     if (preset.showFPS !== undefined) {
         audioMotion.showFPS = preset.showFPS;
         const showFPSEl = document.getElementById('showFPS');
         if (showFPSEl) showFPSEl.dataset.active = preset.showFPS ? '1' : '0';
-        // ensureFpsCounterTimer();
     }
 
     if (preset.loRes !== undefined) {
@@ -1792,37 +1706,7 @@ async function uploadBackground(input) {
     input.value = '';
 }
 
-// ===========================
-// IMPORT/EXPORT
-// ===========================
-function exportSettings() {
-    const settings = getCurrentSettings();
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settings, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "spectrum-settings.json");
-    downloadAnchor.click();
-    console.log('[Export] Settings exported');
-}
 
-function importSettings(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        try {
-            const settings = JSON.parse(e.target.result);
-            applyPreset(settings);
-            alert('Settings imported successfully!');
-            console.log('[Import] Settings imported');
-        } catch (error) {
-            alert('Error importing settings: ' + error.message);
-            console.error('[Import] Error:', error);
-        }
-    };
-    reader.readAsText(file);
-}
 
 // ===========================
 // VOLUMIO INTEGRATION
@@ -2066,13 +1950,10 @@ function displayBrowseItems(data) {
         }
     }
 
-    console.log('[Browse] Displaying', items.length, 'items');
-
     if (!items || items.length === 0) {
         browseList.innerHTML = '<div style="padding: 20px; text-align: center; color: #8b9dc3;">No items found</div>';
         return;
     }
-
     browseList.innerHTML = '';
     console.log('[Browse] Displaying', items.length, 'items');
 
@@ -2702,19 +2583,6 @@ function updateFPS() {
     lastFpsTime = now;
 }
 
-// Ensure FPS timer and UI reflect current setting
-// function ensureFpsCounterTimer() {
-//     const showFpsActive = document.getElementById('showFPS')?.dataset.active === '1';
-//     const counter = document.getElementById('fpsCounter');
-//     if (counter) counter.style.display = showFpsActive ? '' : 'none';
-
-//     if (showFpsActive && !fpsInterval) {
-//         fpsInterval = setInterval(updateFPS, 1000);
-//     } else if (!showFpsActive && fpsInterval) {
-//         clearInterval(fpsInterval);
-//         fpsInterval = null;
-//     }
-// }
 
 // Apply low-resolution rendering hint to canvas and analyzer
 function applyLoRes(active) {
@@ -2760,40 +2628,9 @@ async function initAudioMotion() {
 
         // Fetch settings from server
         let serverSettings = await fetchServerSettings();
-
-        // Default config
-        const defaultConfig = {
-            mode: 4,
-            fftSize: 8192,
-            smoothing: 0.7,
-            gradient: 'prism',
-            // Highest and lowest decibel values represented on Y-axis.
-            // 0 is the loudest possible volume.
-            minDecibels: -85,
-            maxDecibels: -25,
-            showPeaks: true,
-            showScaleX: true,
-            showScaleY: false,
-            lumiBars: false,
-            outlineBars: true,
-            roundBars: false,
-            ledBars: false,
-            alphaBars: false,
-            reflexRatio: 0,
-            radial: false,
-            channelLayout: 'single',
-            showBgColor: false,
-            overlay: true,
-            bgAlpha: 0,
-            linearBoost: 1.6,
-            minFreq: 20,
-            maxFreq: 22000
-        };
-
         // Merge configs (server settings override defaults)
         const config = {
             audioCtx: sharedAudioContext,
-            ...defaultConfig,
             ...serverSettings
         };
 
@@ -3042,396 +2879,159 @@ function syncUIWithSettings(settings) {
     if (!settings || typeof settings !== 'object') return;
 
     try {
-        // Apply Now Playing layout if present
-        const npBox = document.getElementById('nowPlaying');
-        if (npBox) {
+        // now-playing layout
+        function applyNowPlaying() {
+            const npBox = document.getElementById('nowPlaying');
+            if (!npBox) return;
             if (settings.npX !== undefined) {
                 npBox.style.left = parseInt(settings.npX) + 'px';
-                const npX = document.getElementById('npX');
-                if (npX) npX.value = parseInt(settings.npX);
+                const npX = document.getElementById('npX'); if (npX) npX.value = parseInt(settings.npX);
             }
             if (settings.npY !== undefined) {
                 npBox.style.top = parseInt(settings.npY) + 'px';
-                const npY = document.getElementById('npY');
-                if (npY) npY.value = parseInt(settings.npY);
+                const npY = document.getElementById('npY'); if (npY) npY.value = parseInt(settings.npY);
             }
             if (settings.npW !== undefined) {
                 npBox.style.width = parseInt(settings.npW) + 'px';
-                const npW = document.getElementById('npW');
-                if (npW) npW.value = parseInt(settings.npW);
+                const npW = document.getElementById('npW'); if (npW) npW.value = parseInt(settings.npW);
             }
             if (settings.npH !== undefined) {
-                if (settings.npH === 'auto') {
-                    npBox.style.height = '';
-                } else {
-                    npBox.style.height = parseInt(settings.npH) + 'px';
-                }
-                const npH = document.getElementById('npH');
-                if (npH) npH.value = settings.npH;
+                npBox.style.height = settings.npH === 'auto' ? '' : parseInt(settings.npH) + 'px';
+                const npH = document.getElementById('npH'); if (npH) npH.value = settings.npH;
             }
-            npBox.style.right = 'auto';
-            npBox.style.bottom = 'auto';
+            npBox.style.right = 'auto'; npBox.style.bottom = 'auto';
         }
 
-        // Mode (this is a SELECT, not radio buttons)
-        if (settings.mode !== undefined) {
-            const mode = document.querySelector('select#mode');
-            if (mode) {
-                const modeValue = settings.mode.toString();
-                console.log('[UI Sync] Setting mode to:', modeValue);
-                mode.value = modeValue;
-                console.log('[UI Sync] Mode select value is now:', mode.value);
-
-                // Verify it was set
-                if (mode.value !== modeValue) {
-                    console.warn('[UI Sync] Mode value mismatch. Expected:', modeValue, 'Got:', mode.value);
-                }
-            } else {
-                console.warn('[UI Sync] Mode select element not found');
+        // visual settings (mode, gradients, color, effects)
+        function applyVisuals() {
+            if (settings.mode !== undefined) {
+                const mode = document.querySelector('select#mode');
+                if (mode) {
+                    const modeValue = settings.mode.toString();
+                    console.log('[UI Sync] Setting mode to:', modeValue);
+                    mode.value = modeValue;
+                    if (mode.value !== modeValue) console.warn('[UI Sync] Mode value mismatch. Expected:', modeValue, 'Got:', mode.value);
+                } else console.warn('[UI Sync] Mode select element not found');
             }
-        }
 
-        // Gradients
-        if (settings.gradient) {
-            const gradSelect = document.getElementById('gradient');
-            if (gradSelect) gradSelect.value = settings.gradient;
-        }
-        if (settings.gradientRight) {
-            const gradRight = document.getElementById('gradientRight');
-            if (gradRight) gradRight.value = settings.gradientRight;
-        }
+            if (settings.gradient) { const gradSelect = document.getElementById('gradient'); if (gradSelect) gradSelect.value = settings.gradient; }
+            if (settings.gradientRight) { const gradRight = document.getElementById('gradientRight'); if (gradRight) gradRight.value = settings.gradientRight; }
+            if (settings.colorMode) setRadioValue('colorModeSelect', settings.colorMode);
 
-        // Color Mode
-        if (settings.colorMode) {
-            setRadioValue('colorModeSelect', settings.colorMode);
-        }
+            const effectsList = ['alphaBars','lumiBars','ledBars','outlineBars','radial','roundBars'];
+            effectsList.forEach(name => { if (settings[name] !== undefined) { const el = document.getElementById(name); if (el) el.dataset.active = settings[name] ? '1' : '0'; } });
 
-        // Effects (buttons with data-active)
-        const effectsList = ['alphaBars', 'lumiBars', 'ledBars', 'outlineBars', 'radial', 'roundBars'];
-        effectsList.forEach(effectName => {
-            if (settings[effectName] !== undefined) {
-                const el = document.getElementById(effectName);
-                if (el) {
-                    el.dataset.active = settings[effectName] ? '1' : '0';
-                }
+            if (settings.splitGrad !== undefined || settings.splitGradient !== undefined) {
+                const val = settings.splitGrad !== undefined ? settings.splitGrad : settings.splitGradient;
+                const el = document.getElementById('splitGrad'); if (el) el.dataset.active = val ? '1' : '0';
             }
-        });
-
-        // Split Grad (support both splitGrad and splitGradient keys)
-        if (settings.splitGrad !== undefined || settings.splitGradient !== undefined) {
-            const val = settings.splitGrad !== undefined ? settings.splitGrad : settings.splitGradient;
-            const el = document.getElementById('splitGrad');
-            if (el) el.dataset.active = val ? '1' : '0';
+            if (settings.linkGrads !== undefined) { const el = document.getElementById('linkGrads'); if (el) el.dataset.active = settings.linkGrads ? '1' : '0'; }
         }
 
-        // Link Grads
-        if (settings.linkGrads !== undefined) {
-            const el = document.getElementById('linkGrads');
-            if (el) el.dataset.active = settings.linkGrads ? '1' : '0';
-        }
+        // frequency/scale/channel/reflex
+        function applyFrequencyAndChannels() {
+            if (settings.channelLayout) { const select = document.getElementById('channelLayout'); if (select) select.value = settings.channelLayout; }
+            if (settings.frequencyScale) setRadioValue('freqScaleSelect', settings.frequencyScale); else if (settings.freqScale) setRadioValue('freqScaleSelect', settings.freqScale);
+            if (settings.minFreq !== undefined) { const input = document.getElementById('minFreq'); if (input) input.value = settings.minFreq; }
+            if (settings.maxFreq !== undefined) { const input = document.getElementById('maxFreq'); if (input) input.value = settings.maxFreq; }
+            updateFreqRange();
 
-        // Channel Layout
-        if (settings.channelLayout) {
-            const select = document.getElementById('channelLayout');
-            if (select) select.value = settings.channelLayout;
-        }
-
-        // Frequency Scale
-        if (settings.frequencyScale) {
-            setRadioValue('freqScaleSelect', settings.frequencyScale);
-        } else if (settings.freqScale) {
-            setRadioValue('freqScaleSelect', settings.freqScale);
-        }
-
-        // Frequency Range
-        if (settings.minFreq !== undefined) {
-            const input = document.getElementById('minFreq');
-            if (input) input.value = settings.minFreq;
-        }
-        if (settings.maxFreq !== undefined) {
-            const input = document.getElementById('maxFreq');
-            if (input) input.value = settings.maxFreq;
-        }
-        updateFreqRange();
-
-        // Reflex
-        if (settings.reflexRatio !== undefined) {
-            if (settings.reflexRatio === 0.25) {
-                setRadioValue('reflexSelect', '3');
-            } else if (settings.reflexRatio === 0.4) {
-                setRadioValue('reflexSelect', '1');
-            } else if (settings.reflexRatio === 0.5) {
-                setRadioValue('reflexSelect', '2');
-            } else {
-                setRadioValue('reflexSelect', '0');
+            if (settings.reflexRatio !== undefined) {
+                if (settings.reflexRatio === 0.25) setRadioValue('reflexSelect','3');
+                else if (settings.reflexRatio === 0.4) setRadioValue('reflexSelect','1');
+                else if (settings.reflexRatio === 0.5) setRadioValue('reflexSelect','2');
+                else setRadioValue('reflexSelect','0');
             }
-        }
 
-        // Scale X (support string '0|1|2' or booleans/noteLabels)
-        if (settings.showScaleX !== undefined || settings.noteLabels !== undefined) {
-            let scaleXValue = '1';
-            const sx = settings.showScaleX;
-            if (sx === '0' || sx === 0 || sx === false) scaleXValue = '0';
-            else if (sx === '2' || sx === 2 || settings.noteLabels === true) scaleXValue = '2';
-            else if (sx === '1' || sx === 1 || sx === true) scaleXValue = '1';
-            setRadioValue('scaleXSelect', scaleXValue);
-        }
-
-        // Scale Y
-        if (settings.showScaleY !== undefined) {
-            const scaleYValue = (settings.showScaleY === true || settings.showScaleY === 'true') ? 'true' : 'false';
-            setRadioValue('showScaleY', scaleYValue);
-        }
-
-        // Mirror
-        if (settings.mirror !== undefined) {
-            setRadioValue('mirrorSelect', settings.mirror.toString());
-        }
-
-        // Bar Space
-        if (settings.barSpace !== undefined) {
-            const input = document.getElementById('barSpace');
-            if (input) {
-                input.value = settings.barSpace;
-                updateValueDisplay('barSpace', 'barSpaceValue');
+            if (settings.showScaleX !== undefined || settings.noteLabels !== undefined) {
+                let scaleXValue = '1'; const sx = settings.showScaleX;
+                if (sx === '0' || sx === 0 || sx === false) scaleXValue = '0';
+                else if (sx === '2' || sx === 2 || settings.noteLabels === true) scaleXValue = '2';
+                else if (sx === '1' || sx === 1 || sx === true) scaleXValue = '1';
+                setRadioValue('scaleXSelect', scaleXValue);
             }
+
+            if (settings.showScaleY !== undefined) setRadioValue('showScaleY', (settings.showScaleY === true || settings.showScaleY === 'true') ? 'true' : 'false');
+            if (settings.mirror !== undefined) setRadioValue('mirrorSelect', settings.mirror.toString());
         }
 
-        // Fill Alpha
-        if (settings.fillAlpha !== undefined) {
-            const input = document.getElementById('fillAlpha');
-            if (input) {
-                input.value = settings.fillAlpha;
-                updateValueDisplay('fillAlpha', 'fillAlphaValue');
+        // bars, visual numeric controls and peaks
+        function applyBarsAndPeaks() {
+            if (settings.barSpace !== undefined) { const input = document.getElementById('barSpace'); if (input) { input.value = settings.barSpace; updateValueDisplay('barSpace','barSpaceValue'); } }
+            if (settings.fillAlpha !== undefined) { const input = document.getElementById('fillAlpha'); if (input) { input.value = settings.fillAlpha; updateValueDisplay('fillAlpha','fillAlphaValue'); } }
+            if (settings.volume !== undefined) { const input = document.getElementById('volume'); if (input) { input.value = settings.volume; updateValueDisplay('volume','volumeValue'); } }
+            if (settings.lineWidth !== undefined) { const input = document.getElementById('lineWidth'); if (input) { input.value = settings.lineWidth; updateValueDisplay('lineWidth','lineWidthValue'); } }
+            if (settings.radius !== undefined) { const input = document.getElementById('radius'); if (input) { input.value = settings.radius; updateValueDisplay('radius','radiusValue'); } }
+            if (settings.spinSpeed !== undefined) { const input = document.getElementById('spinSpeed'); if (input) { input.value = settings.spinSpeed; updateValueDisplay('spinSpeed','spinSpeedValue'); } }
+            if (settings.fftSize !== undefined) { const select = document.getElementById('fftSize'); if (select) select.value = settings.fftSize; }
+            if (settings.smoothing !== undefined) { const input = document.getElementById('smoothing'); if (input) { input.value = settings.smoothing; updateValueDisplay('smoothing','smoothingValue'); } }
+            if (settings.ansiBands !== undefined) setRadioValue('ansiBandsSelect', settings.ansiBands.toString());
+            if (settings.linearAmplitude !== undefined) setRadioValue('linearAmplitudeSelect', settings.linearAmplitude.toString());
+            if (settings.weightingFilter) { const select = document.getElementById('weightingFilter'); if (select) select.value = settings.weightingFilter; }
+
+            if (settings.gravity !== undefined) { const input = document.getElementById('gravity'); if (input) { input.value = settings.gravity; updateValueDisplay('gravity','gravityValue'); } }
+            if (settings.peakFadeTime !== undefined) { const input = document.getElementById('peakFade'); if (input) { input.value = settings.peakFadeTime; updateValueDisplay('peakFade','peakFadeValue'); } }
+            if (settings.peakHoldTime !== undefined) { const input = document.getElementById('peakHold'); if (input) { input.value = settings.peakHoldTime; updateValueDisplay('peakHold','peakHoldValue'); } }
+
+            if (settings.showFPS !== undefined) { const el = document.getElementById('showFPS'); if (el) el.dataset.active = settings.showFPS ? '1' : '0'; }
+            if (settings.showPeaks !== undefined) { const el = document.getElementById('showPeaks'); if (el) el.dataset.active = settings.showPeaks ? '1' : '0'; }
+            if (settings.peakLines !== undefined) { const el = document.getElementById('peakLines'); if (el) el.dataset.active = settings.peakLines ? '1' : '0'; }
+            if (settings.loRes !== undefined) { const el = document.getElementById('loRes'); if (el) el.dataset.active = settings.loRes ? '1' : '0'; applyLoRes(!!settings.loRes); }
+
+            if (settings.sensitivity !== undefined) { const sens = settings.sensitivity.toString(); setRadioValue('sensitivitySelect', sens); }
+        }
+
+        // control bar, now-playing visibility and audio source
+        function applyControlsAndAudioSource() {
+            const showCtrl = document.getElementById('showControlBar');
+            if (showCtrl && settings.showControlBar !== undefined) { showCtrl.checked = !!settings.showControlBar; showCtrl.dispatchEvent(new Event('change')); }
+            const showNP = document.getElementById('showNowPlaying');
+            if (showNP && settings.showNowPlaying !== undefined) { showNP.checked = !!settings.showNowPlaying; showNP.dispatchEvent(new Event('change')); }
+
+            const audioSourceSelect = document.getElementById('audioSource');
+            const mpdUrlInput = document.getElementById('mpdUrl');
+            const mpdUrlLabel = document.getElementById('mpdUrlLabel');
+            if (audioSourceSelect && settings.audioSource) {
+                audioSourceSelect.value = settings.audioSource;
+                const isMpd = settings.audioSource === 'mpd';
+                if (mpdUrlInput) mpdUrlInput.style.display = isMpd ? 'block' : 'none';
+                if (mpdUrlLabel) mpdUrlLabel.style.display = isMpd ? 'block' : 'none';
             }
+            if (mpdUrlInput && settings.mpdUrl) mpdUrlInput.value = settings.mpdUrl;
         }
 
-        if (settings.volume !== undefined) {
-            const input = document.getElementById('volume');
-            if (input) {
-                input.value = settings.volume;
-                updateValueDisplay('volume', 'volumeValue');
+        // background and URLs
+        function applyBackgroundAndUrls() {
+            const bgTypeSel = document.getElementById('bgType'); if (bgTypeSel && settings.bgType) bgTypeSel.value = settings.bgType;
+            const bgFileSel = document.getElementById('bgFile'); if (bgFileSel && settings.bgFile) {
+                const target = settings.bgFile; const opt = Array.from(bgFileSel.options).find(o => o.value === target || o.text === target); if (opt) bgFileSel.value = opt.value;
             }
+            const bgFitSel = document.getElementById('bgFit'); if (bgFitSel && settings.bgFit) { bgFitSel.value = settings.bgFit; updateBackgroundFit(settings.bgFit); }
+            const bgDimInput = document.getElementById('bgDim'); if (bgDimInput && settings.bgDim !== undefined) { bgDimInput.value = parseFloat(settings.bgDim); updateBackgroundDim(parseFloat(settings.bgDim)); }
+
+            const wsUrlInput = document.getElementById('wsUrl'); if (wsUrlInput && settings.wsUrl) wsUrlInput.value = settings.wsUrl;
+            const volumioUrlInput = document.getElementById('volumioUrl'); if (volumioUrlInput && settings.volumioUrl) volumioUrlInput.value = settings.volumioUrl;
         }
 
-        // Line Width
-        if (settings.lineWidth !== undefined) {
-            const input = document.getElementById('lineWidth');
-            if (input) {
-                input.value = settings.lineWidth;
-                updateValueDisplay('lineWidth', 'lineWidthValue');
-            }
+        // random settings
+        function applyRandomSettings() {
+            const randomCheckboxes = ['randomMode','randomGradient','randomGradientRight','randomColorMode','randomBarSpace','randomFillAlpha','randomLineWidth','randomSensitivity','randomMirror','randomAlphaBars','randomLumiBars','randomLedBars','randomOutlineBars','randomRadial','randomRoundBars','randomBgType','randomBgFile','randomBgFit','randomOnTrackChange','randomOnInterval'];
+            randomCheckboxes.forEach(cbId => { if (settings[cbId] !== undefined) { const checkbox = document.getElementById(cbId); if (checkbox) checkbox.checked = !!settings[cbId]; } });
+            if (settings.randomInterval !== undefined) { const intervalInput = document.getElementById('randomInterval'); if (intervalInput) intervalInput.value = settings.randomInterval; }
         }
 
-        // Radius
-        if (settings.radius !== undefined) {
-            const input = document.getElementById('radius');
-            if (input) {
-                input.value = settings.radius;
-                updateValueDisplay('radius', 'radiusValue');
-            }
-        }
-
-        // Spin Speed
-        if (settings.spinSpeed !== undefined) {
-            const input = document.getElementById('spinSpeed');
-            if (input) {
-                input.value = settings.spinSpeed;
-                updateValueDisplay('spinSpeed', 'spinSpeedValue');
-            }
-        }
-
-        // FFT Size
-        if (settings.fftSize !== undefined) {
-            const select = document.getElementById('fftSize');
-            if (select) select.value = settings.fftSize;
-        }
-
-        // Smoothing
-        if (settings.smoothing !== undefined) {
-            const input = document.getElementById('smoothing');
-            if (input) {
-                input.value = settings.smoothing;
-                updateValueDisplay('smoothing', 'smoothingValue');
-            }
-        }
-
-        // ANSI Bands
-        if (settings.ansiBands !== undefined) {
-            setRadioValue('ansiBandsSelect', settings.ansiBands.toString());
-        }
-
-        // Linear Amplitude
-        if (settings.linearAmplitude !== undefined) {
-            setRadioValue('linearAmplitudeSelect', settings.linearAmplitude.toString());
-        }
-
-        // Weighting Filter
-        if (settings.weightingFilter) {
-            const select = document.getElementById('weightingFilter');
-            if (select) select.value = settings.weightingFilter;
-        }
-
-        // Gravity
-        if (settings.gravity !== undefined) {
-            const input = document.getElementById('gravity');
-            if (input) {
-                input.value = settings.gravity;
-                updateValueDisplay('gravity', 'gravityValue');
-            }
-        }
-
-        // Peak Fade
-        if (settings.peakFadeTime !== undefined) {
-            const input = document.getElementById('peakFade');
-            if (input) {
-                input.value = settings.peakFadeTime;
-                updateValueDisplay('peakFade', 'peakFadeValue');
-            }
-        }
-
-        // Peak Hold
-        if (settings.peakHoldTime !== undefined) {
-            const input = document.getElementById('peakHold');
-            if (input) {
-                input.value = settings.peakHoldTime;
-                updateValueDisplay('peakHold', 'peakHoldValue');
-            }
-        }
-
-        // // Max FPS
-        // if (settings.maxFPS !== undefined) {
-        //     const select = document.getElementById('maxFPS');
-        //     if (select) select.value = settings.maxFPS;
-        // }
-
-        // Show FPS
-        if (settings.showFPS !== undefined) {
-            const el = document.getElementById('showFPS');
-            if (el) el.dataset.active = settings.showFPS ? '1' : '0';
-            // ensureFpsCounterTimer();
-        }
-
-        // Show Peaks
-        if (settings.showPeaks !== undefined) {
-            const el = document.getElementById('showPeaks');
-            if (el) el.dataset.active = settings.showPeaks ? '1' : '0';
-        }
-
-        // peakLines
-        if (settings.peakLines !== undefined) {
-            const el = document.getElementById('peakLines');
-            if (el) el.dataset.active = settings.peakLines ? '1' : '0';
-        }
-
-        // // Show Background Color
-        // if (settings.showBgColor !== undefined) {
-        //     const el = document.getElementById('showBgColor');
-        //     if (el) el.dataset.active = settings.showBgColor ? '1' : '0';
-        // }
-
-
-        // Lo Res
-        if (settings.loRes !== undefined) {
-            const el = document.getElementById('loRes');
-            if (el) el.dataset.active = settings.loRes ? '1' : '0';
-            applyLoRes(!!settings.loRes);
-        }
-
-        // Sensitivity radio
-        if (settings.sensitivity !== undefined) {
-            const sens = settings.sensitivity.toString();
-            setRadioValue('sensitivitySelect', sens);
-        }
-
-        // Control bar and Now Playing checkboxes
-        const showCtrl = document.getElementById('showControlBar');
-        if (showCtrl && settings.showControlBar !== undefined) {
-            showCtrl.checked = !!settings.showControlBar;
-            showCtrl.dispatchEvent(new Event('change'));
-        }
-        const showNP = document.getElementById('showNowPlaying');
-        if (showNP && settings.showNowPlaying !== undefined) {
-            showNP.checked = !!settings.showNowPlaying;
-            showNP.dispatchEvent(new Event('change'));
-        }
-
-        // Audio Source + MPD URL
-        const audioSourceSelect = document.getElementById('audioSource');
-        const mpdUrlInput = document.getElementById('mpdUrl');
-        const mpdUrlLabel = document.getElementById('mpdUrlLabel');
-        if (audioSourceSelect && settings.audioSource) {
-            audioSourceSelect.value = settings.audioSource;
-            const isMpd = settings.audioSource === 'mpd';
-            if (mpdUrlInput) mpdUrlInput.style.display = isMpd ? 'block' : 'none';
-            if (mpdUrlLabel) mpdUrlLabel.style.display = isMpd ? 'block' : 'none';
-        }
-        if (mpdUrlInput && settings.mpdUrl) {
-            mpdUrlInput.value = settings.mpdUrl;
-        }
+        // execute grouped appliations
+        applyNowPlaying();
+        applyVisuals();
+        applyFrequencyAndChannels();
+        applyBarsAndPeaks();
+        applyControlsAndAudioSource();
+        applyBackgroundAndUrls();
+        applyRandomSettings();
 
         console.log('[AM] ✓ UI elements synced with server settings');
 
-        // Apply Background-related settings if present
-        const bgTypeSel = document.getElementById('bgType');
-        if (bgTypeSel && settings.bgType) {
-            bgTypeSel.value = settings.bgType;
-        }
-
-        // Populate background files may be async; set value if option exists
-        const bgFileSel = document.getElementById('bgFile');
-        if (bgFileSel && settings.bgFile) {
-            // Try to select matching option by text or value
-            const target = settings.bgFile;
-            // Prefer exact value match
-            const opt = Array.from(bgFileSel.options).find(o => o.value === target || o.text === target);
-            if (opt) bgFileSel.value = opt.value;
-        }
-
-        const bgFitSel = document.getElementById('bgFit');
-        if (bgFitSel && settings.bgFit) {
-            bgFitSel.value = settings.bgFit;
-            updateBackgroundFit(settings.bgFit);
-        }
-
-        const bgDimInput = document.getElementById('bgDim');
-        if (bgDimInput && settings.bgDim !== undefined) {
-            bgDimInput.value = parseFloat(settings.bgDim);
-            updateBackgroundDim(parseFloat(settings.bgDim));
-        }
-
-        // Apply URLs if provided
-        const wsUrlInput = document.getElementById('wsUrl');
-        if (wsUrlInput && settings.wsUrl) wsUrlInput.value = settings.wsUrl;
-        const volumioUrlInput = document.getElementById('volumioUrl');
-        if (volumioUrlInput && settings.volumioUrl) volumioUrlInput.value = settings.volumioUrl;
-
-        // Sync random configuration checkboxes
-        const randomCheckboxes = [
-            'randomMode', 'randomGradient', 'randomGradientRight', 'randomColorMode',
-            'randomBarSpace', 'randomFillAlpha', 'randomLineWidth', 'randomSensitivity',
-            'randomMirror', 'randomAlphaBars', 'randomLumiBars', 'randomLedBars',
-            'randomOutlineBars', 'randomRadial', 'randomRoundBars', 'randomBgType',
-            'randomBgFile', 'randomBgFit', 'randomOnTrackChange', 'randomOnInterval'
-        ];
-        randomCheckboxes.forEach(cbId => {
-            if (settings[cbId] !== undefined) {
-                const checkbox = document.getElementById(cbId);
-                if (checkbox) {
-                    checkbox.checked = !!settings[cbId];
-                }
-            }
-        });
-
-        // Sync random interval value
-        if (settings.randomInterval !== undefined) {
-            const intervalInput = document.getElementById('randomInterval');
-            if (intervalInput) {
-                intervalInput.value = settings.randomInterval;
-            }
-        }
-
-        // Finally ensure background gets applied according to synced settings
+        // ensure background updated according to synced settings
         updateBackgroundControls();
         applyBackground();
     } catch (error) {
@@ -3491,9 +3091,6 @@ window.addEventListener("DOMContentLoaded", () => {
     }, 500);
 
     setTimeout(() => { forceConnected = false; }, 5000);
-
-    // Connect to Volumio via Socket.IO for push state
-    setTimeout(connectVolumioSocket, 200);
 });
 
 window.addEventListener("beforeunload", () => {
@@ -3507,7 +3104,7 @@ window.addEventListener("beforeunload", () => {
 // ===========================
 // RANDOM SETTINGS LOGIC
 // ===========================
-(function () {
+function initRandomSettings() {
     let randomIntervalTimer = null;
     let lastRandomTime = null;
     let nextRandomTime = null;
@@ -3665,13 +3262,13 @@ window.addEventListener("beforeunload", () => {
         const lastTimeEl = document.getElementById('randomLastTime');
         const nextTimeEl = document.getElementById('randomNextTime');
 
-        if (lastRandomTime) {
+        if (lastRandomTime && lastTimeEl) {
             lastTimeEl.textContent = lastRandomTime.toLocaleTimeString();
         }
 
-        if (nextRandomTime) {
+        if (nextRandomTime && nextTimeEl) {
             nextTimeEl.textContent = nextRandomTime.toLocaleTimeString();
-        } else {
+        } else if (nextTimeEl) {
             nextTimeEl.textContent = '-';
         }
     }
@@ -3745,12 +3342,14 @@ window.addEventListener("beforeunload", () => {
 
     // Update status every second
     setInterval(updateRandomStatus, 1000);
-})();
+}
+
+initRandomSettings();
 
 // ===========================
 // NOW PLAYING DRAG & VISIBILITY MANAGEMENT
 // ===========================
-(function () {
+function initNowPlayingDrag() {
     const box = document.getElementById("nowPlaying");
     if (!box) return;
 
@@ -3921,22 +3520,29 @@ window.addEventListener("beforeunload", () => {
     }
     if (applyBtn) applyBtn.addEventListener('click', applyFromInputs);
     if (resetBtn) resetBtn.addEventListener('click', () => {
-        document.getElementById('npX').value = 16;
-        document.getElementById('npY').value = 16;
-        document.getElementById('npW').value = 600;
-        document.getElementById('npH').value = 'auto';
+        const elX = document.getElementById('npX');
+        const elY = document.getElementById('npY');
+        const elW = document.getElementById('npW');
+        const elH = document.getElementById('npH');
+        if (elX) elX.value = 16;
+        if (elY) elY.value = 16;
+        if (elW) elW.value = 600;
+        if (elH) elH.value = 'auto';
         applyFromInputs();
     });
-})();
+}
+
+initNowPlayingDrag();
 
 
 // ===========================
 // BACKGROUND FILE VISIBILITY TOGGLE
 // ===========================
-(function () {
+function initBackgroundFileVisibility() {
     const bgTypeSelect = document.getElementById('bgType');
     const bgFileLabel = document.getElementById('bgFileLabel');
     const bgFileSelect = document.getElementById('bgFile');
+    if (!bgTypeSelect || !bgFileLabel || !bgFileSelect) return;
 
     function updateFileVisibility() {
         const isFileSelected = bgTypeSelect.value === 'file';
@@ -3946,22 +3552,26 @@ window.addEventListener("beforeunload", () => {
 
     bgTypeSelect.addEventListener('change', updateFileVisibility);
     updateFileVisibility();
-})();
+}
+
+initBackgroundFileVisibility();
 
 // ===========================
 // AUDIO SOURCE SETTINGS
 // ===========================
-(function () {
+function initAudioSourceUI() {
     const audioSourceSelect = document.getElementById('audioSource');
     const mpdUrlInput = document.getElementById('mpdUrl');
     const mpdUrlLabel = document.getElementById('mpdUrlLabel');
-    
+    if (!audioSourceSelect) {
+        console.log('[Audio Source UI] audioSource element not found');
+    }
     console.log('[Audio Source UI] Elements found:', {
         audioSourceSelect: !!audioSourceSelect,
         mpdUrlInput: !!mpdUrlInput,
         mpdUrlLabel: !!mpdUrlLabel
     });
-    
+
     if (audioSourceSelect) {
         audioSourceSelect.addEventListener('change', function() {
             const isMpd = this.value === 'mpd';
@@ -3970,10 +3580,10 @@ window.addEventListener("beforeunload", () => {
             if (mpdUrlLabel) mpdUrlLabel.style.display = isMpd ? 'block' : 'none';
         });
     }
-    
+
     const applyAudioSourceBtn = document.getElementById('applyAudioSourceBtn');
     console.log('[Audio Source UI] Apply button found:', !!applyAudioSourceBtn);
-    
+
     if (applyAudioSourceBtn) {
         console.log('[Audio Source UI] ✓ Registering click handler for Apply button');
         applyAudioSourceBtn.addEventListener('click', async function() {
@@ -3981,21 +3591,21 @@ window.addEventListener("beforeunload", () => {
             const source = audioSourceSelect ? audioSourceSelect.value : 'websocket';
             const mpdUrl = mpdUrlInput ? mpdUrlInput.value : 'http://192.168.1.63:8001';
             const statusDiv = document.getElementById('audioSourceStatus');
-            
+
             console.log('[Audio Source UI] Selected source:', source);
             console.log('[Audio Source UI] MPD URL:', mpdUrl);
-            
+
             if (statusDiv) {
                 statusDiv.style.display = 'block';
                 statusDiv.textContent = `Switching to ${source}...`;
                 statusDiv.style.color = '#8b9dc3';
             }
-            
+
             try {
                 console.log('[Audio Source UI] Calling switchAudioSource...');
                 const result = await switchAudioSource(source, mpdUrl);
                 console.log('[Audio Source UI] Switch result:', result);
-                
+
                 if (statusDiv) {
                     if (result.success) {
                         statusDiv.textContent = `✓ Successfully switched to ${source}`;
@@ -4019,4 +3629,6 @@ window.addEventListener("beforeunload", () => {
     } else {
         console.error('[Audio Source UI] ✗ Apply button NOT found! Cannot register event listener.');
     }
-})();
+}
+
+initAudioSourceUI();
